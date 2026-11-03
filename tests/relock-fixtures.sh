@@ -30,5 +30,7 @@ for fixture in "$root"/tests/fixtures/*/; do
       ;;
   esac
   echo "== ${fixture#"$root"/}" >&2
-  (cd "$fixture" && "$command" lock "${java[@]}" "$@")
+  # ${a[@]+"${a[@]}"}: bash 3.2, the bash of macOS, takes "${a[@]}" of an
+  # empty array for an unset variable under set -u.
+  (cd "$fixture" && "$command" lock ${java[@]+"${java[@]}"} "$@")
 done

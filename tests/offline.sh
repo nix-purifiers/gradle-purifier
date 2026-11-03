@@ -27,7 +27,7 @@ cleanup() {
   for fixture in java-library kotlin-app; do
     if [[ -x $work/$fixture/.gradle-purifier/distribution/bin/gradle ]]; then
       GRADLE_USER_HOME="$work/$fixture-home" \
-        JAVA_HOME="$work/$fixture/.gradle-purifier/jdk/lib/openjdk" \
+        JAVA_HOME="$(jdk_home "$fixture")" \
         "$work/$fixture/.gradle-purifier/distribution/bin/gradle" --offline --stop >/dev/null 2>&1 || true
     fi
   done
@@ -65,6 +65,14 @@ else
   echo "offline: the system makes no network namespace for this user; the refusing proxy alone cuts Gradle off" >&2
 fi
 
+# The home of the JDK that `prefetch` realized for the copy of fixture
+# $1: lib/openjdk in nixpkgs' OpenJDK on Linux, the JDK itself in its Zulu
+# JDK on Darwin.
+jdk_home() {
+  local jdk=$work/$1/.gradle-purifier/jdk
+  if [ -d "$jdk/lib/openjdk" ]; then echo "$jdk/lib/openjdk"; else echo "$jdk"; fi
+}
+
 # Runs `gradle-purifier <arguments>` in the copy of fixture $1, with the
 # Gradle user home of that copy.
 purifier() {
@@ -83,9 +91,9 @@ gradlew() {
   (
     cd "$work/$fixture"
     GRADLE_USER_HOME="$work/$fixture-home" \
-      JAVA_HOME="$work/$fixture/.gradle-purifier/jdk/lib/openjdk" \
+      JAVA_HOME="$(jdk_home "$fixture")" \
       JAVA_TOOL_OPTIONS="$refusing_proxy -Djava.io.tmpdir=${TMPDIR:-/tmp}" \
-      "${cut[@]}" ./gradlew --no-daemon "$@" 2>&1
+      ${cut[@]+"${cut[@]}"} ./gradlew --no-daemon "$@" 2>&1
   )
 }
 
@@ -132,7 +140,7 @@ echo "rootProject.name = 'wrapper'" >"$work/wrapper/settings.gradle"
 (
   cd "$work/wrapper"
   GRADLE_USER_HOME="$work/wrapper-home" \
-    JAVA_HOME="$work/java-library/.gradle-purifier/jdk/lib/openjdk" \
+    JAVA_HOME="$(jdk_home java-library)" \
     "$work/java-library/.gradle-purifier/distribution/bin/gradle" --no-daemon --offline wrapper >/dev/null 2>&1
 ) || fail "the wrapper task of the Gradle distribution failed"
 for fixture in "${fixtures[@]}"; do
@@ -153,9 +161,9 @@ fetch() {
 }
 tooling=$(fetch https://repo.gradle.org/gradle/libs-releases/org/gradle/gradle-tooling-api/9.1.0/gradle-tooling-api-9.1.0.jar)
 slf4j=$(fetch https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/2.0.16/slf4j-api-2.0.16.jar)
-jdk=$work/java-library/.gradle-purifier/jdk/lib/openjdk
+jdk=$(jdk_home java-library)
 "$jdk/bin/javac" -cp "$tooling" -d "$work/tooling" "$root/tests/ToolingImport.java"
-output=$(JAVA_TOOL_OPTIONS="$refusing_proxy" "${cut[@]}" "$jdk/bin/java" -cp "$work/tooling:$tooling:$slf4j" ToolingImport \
+output=$(JAVA_TOOL_OPTIONS="$refusing_proxy" ${cut[@]+"${cut[@]}"} "$jdk/bin/java" -cp "$work/tooling:$tooling:$slf4j" ToolingImport \
   "$work/java-library" "$work/java-library/.gradle-purifier/distribution" "$work/java-library-home" 2>&1) \
   || { echo "$output"; fail "java-library: the IDE import failed"; }
 grep -q "$(printf '^commons-lang3-3.17.0.jar\tcommons-lang3-3.17.0-sources.jar$')" <<<"$output" \

@@ -106,6 +106,16 @@ set_paths() {
   state=$(dirname "$lockfile")/.gradle-purifier
 }
 
+# The home of the JDK at the store path $1: lib/openjdk in nixpkgs'
+# OpenJDK on Linux, the store path itself in its Zulu JDK on Darwin.
+jdk_home() {
+  if [ -d "$1/lib/openjdk" ]; then
+    printf '%s/lib/openjdk' "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
 # The home of nixpkgs' headless JDK of the major version $1, built with
 # Nix (GC root in the state directory).
 nixpkgs_jdk() {
@@ -113,7 +123,7 @@ nixpkgs_jdk() {
   mkdir -p "$state"
   out=$(nix-build --quiet --out-link "$state/jdk-$1" "$nixpkgs" \
     -A "javaPackages.compiler.openjdk$1.headless") || die "nixpkgs has no headless OpenJDK $1"
-  printf '%s/lib/openjdk' "$out"
+  jdk_home "$out"
 }
 
 # The JDK to run the lock on: nixpkgs' JDK of the major version $1 when it
@@ -597,7 +607,7 @@ prefetch_command() {
   local wrapper_jar paths dist_dir zip
   wrapper_jar=$(find "$distribution/lib" -maxdepth 1 -name 'gradle-wrapper-shared-*.jar' | head -n 1)
   if [ -n "$wrapper_jar" ] && [ -f gradle/wrapper/gradle-wrapper.properties ]; then
-    mapfile -t paths < <("$jdk/lib/openjdk/bin/java" -cp "$wrapper_jar" "$lib/WrapperDistribution.java" "$user_home" "$root")
+    mapfile -t paths < <("$(jdk_home "$jdk")/bin/java" -cp "$wrapper_jar" "$lib/WrapperDistribution.java" "$user_home" "$root")
     dist_dir=${paths[0]}
     zip=${paths[1]}
     mkdir -p "$dist_dir"
@@ -649,7 +659,7 @@ prefetch_command() {
   local major
   major=$(jq -r '.javaMajor' "$lockfile")
   if [ -n "${JAVA_HOME:-}" ] && ! "$JAVA_HOME/bin/java" -version 2>&1 | grep -q "version \"${major}[.\"]"; then
-    echo "gradle-purifier: the lock was made on Java $major and JAVA_HOME is another; for the same builds, export JAVA_HOME=$jdk/lib/openjdk" >&2
+    echo "gradle-purifier: the lock was made on Java $major and JAVA_HOME is another; for the same builds, export JAVA_HOME=$(jdk_home "$jdk")" >&2
   fi
 }
 
@@ -692,7 +702,7 @@ publish_command() {
   mapfile -t excluded < <(jq -r '.projects[] | (if .path == ":" then "" else .path end) as $p
     | .publications[] | "-x", "\($p):generateMetadataFileFor\(.name[0:1] | ascii_upcase)\(.name[1:])Publication"' "$lockfile")
   mapfile -t locked_args < <(jq -r '.gradleArguments[]' "$lockfile")
-  JAVA_HOME=$jdk/lib/openjdk \
+  JAVA_HOME=$(jdk_home "$jdk") \
     GRADLE_PURIFIER_MODE=publish \
     GRADLE_PURIFIER_REPOSITORY=file://$tree \
     GRADLE_PURIFIER_ARTIFACTS=$artifacts \
