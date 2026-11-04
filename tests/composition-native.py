@@ -132,6 +132,7 @@ public final class Downstream { public static void main(String[] args) throws Ex
         if args.maven_producer:
             # Make the competing native version genuinely available. Failure
             # to find an absent artifact would not prove conflict protection.
+            subprocess.run(['nix', 'build', '--no-link', args.maven_producer], check=True)
             artifacts = json.loads(subprocess.check_output(
                 ['nix', 'eval', '--json', args.maven_producer + '.artifacts'], text=True))
             competing_repository = temporary / 'competing-native'
