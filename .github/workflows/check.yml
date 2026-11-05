@@ -123,3 +123,69 @@ jobs:
         run: |
           nix build '.#default' --out-link "$RUNNER_TEMP/snapshot-groovy-cli"
           python3 tests/snapshot-groovy-native.py "$RUNNER_TEMP/snapshot-groovy-cli/bin/gradle-purifier"
+
+  project-sdk-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare SDK proof identity
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-sdk-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-sdk-proof/source-revision"
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build candidate, baseline and the two existing SDKs
+        shell: bash
+        run: |
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-sdk-candidate"
+          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk21_headless' --no-link
+          nix build 'github:nix-purifiers/gradle-purifier/f7ec9a358e25567231b58100d196c40557a6d638#default' \
+            --out-link "$RUNNER_TEMP/gradle-sdk-baseline"
+          python - <<'PYTHON'
+          from pathlib import Path
+          import os
+          root = Path(os.environ['RUNNER_TEMP'])
+          cli = root/'gradle-sdk-candidate/bin/gradle-purifier'
+          descriptor = next(line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith('sdk_descriptor='))
+          (root/'gradle-sdk-proof/sdk-source-descriptor.json').write_bytes(Path(descriptor).read_bytes())
+          PYTHON
+      - name: Observe selected native SDKs on the existing fixture
+        shell: bash
+        run: |
+          python tests/sdk-telemetry/probe.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/telemetry"
+      - name: Replay split SDK and same SDK control through publication
+        shell: bash
+        run: |
+          python tests/sdk-closure/lifecycle.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --baseline-cli "$RUNNER_TEMP/gradle-sdk-baseline/bin/gradle-purifier" \
+            --sdk-receipt "$RUNNER_TEMP/gradle-sdk-proof/telemetry/context.json" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/lifecycle"
+      - name: Reject SDK identity, path, platform and stale role changes
+        shell: bash
+        run: |
+          python tests/sdk-closure/negative.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --project "$RUNNER_TEMP/gradle-sdk-proof/lifecycle/split" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/negative"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-project-sdk-closure
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/gradle-sdk-proof/source-revision
+            ${{ runner.temp }}/gradle-sdk-proof/sdk-source-descriptor.json
+            ${{ runner.temp }}/gradle-sdk-proof/telemetry/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/telemetry/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/lifecycle/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/lifecycle/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/negative/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/negative/*.log
