@@ -1,0 +1,19 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-2.14.1/bin/gradle", "--no-daemon", "clean", "check", "uploadArchives"]
+:clean UP-TO-DATE
+:compileJava
+:processResources UP-TO-DATE
+:classes
+:compileTestJava
+:processTestResources UP-TO-DATE
+:testClasses
+:epochTest
+EPOCH TEST PASSED
+:test SKIPPED
+:check
+:jar
+:uploadArchivesCould not find metadata example:epoch/maven-metadata.xml in remote (file:/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-lbgb3uiw/native/repository)
+
+
+BUILD SUCCESSFUL
+
+Total time: 1.38 secs

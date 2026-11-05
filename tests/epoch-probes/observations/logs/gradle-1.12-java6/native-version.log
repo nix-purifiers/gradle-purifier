@@ -1,0 +1,9 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-1.12/bin/gradle", "--version"]
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+net.rubygrapefruit.platform.internal.jni.PosixFileFunctions.symlink(Ljava/lang/String;Ljava/lang/String;Lnet/rubygrapefruit/platform/internal/FunctionResult;)V
+
+* Try:
+Run with --stacktrace option to get the stack trace. Run with --info or --debug option to get more log output.

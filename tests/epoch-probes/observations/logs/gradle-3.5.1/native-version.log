@@ -1,0 +1,14 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-3.5.1/bin/gradle", "--version"]
+
+------------------------------------------------------------
+Gradle 3.5.1
+------------------------------------------------------------
+
+Build time:   2017-06-16 14:36:27 UTC
+Revision:     d4c3bb4eac74bd0a3c70a0d213709e484193e251
+
+Groovy:       2.4.10
+Ant:          Apache Ant(TM) version 1.9.6 compiled on June 29 2015
+JVM:          1.8.0_504 (Oracle Corporation 25.504-b01)
+OS:           Linux 7.2.11 amd64
+

@@ -1,0 +1,1012 @@
+{
+  "observedDate": "2026-11-05",
+  "sourceRevision": "759d96470f4857e90fffcba17ab532efda572449",
+  "system": "x86_64-linux",
+  "cli": "/nix/store/2p1d1z2isp7qwmjjp1xcc15ciinqa6nd-gradle-purifier/bin/gradle-purifier",
+  "ciCertified": false,
+  "interpretation": "Local test-only probes. Native control success is not purifier compatibility. Failed fixtures/runtimes do not establish a version floor. No supported ranges.",
+  "profiles": [
+    {
+      "profile": {
+        "id": "gradle-0.7",
+        "gradle": "0.7",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-0.7-bin.zip",
+        "gradleSha256": "4e354fcb0d5c0b0e7789cd6ee900456edaf993f6dd890c4a1c217d90d2a6a6ad",
+        "managerRuntime": "java6",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.26,
+          "log": "logs/gradle-0.7/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 1.27,
+          "log": "logs/gradle-0.7/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-0.7/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-0.7/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.07,
+          "log": "logs/gradle-0.7/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "3e81ac0a4e277fa8c9ae75bb55bb4cb7ab0b51f8bdac8bbed1da64f95e51a793",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-0.9.2",
+        "gradle": "0.9.2",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-0.9.2-bin.zip",
+        "gradleSha256": "f94d7642348c558fc05ab5fd6fb947fb1ed8fed5931ddb73dd04fb0de22d669b",
+        "managerRuntime": "java6",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-0.9.2/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.72,
+          "log": "logs/gradle-0.9.2/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-0.9.2/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-0.9.2/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.22,
+          "log": "logs/gradle-0.9.2/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "417eb8c5d551cd215ff090cd9277cd91a8d6cd3bdf98c35b9beb0582b423f1b6",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-1.12",
+        "gradle": "1.12",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+        "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+        "managerRuntime": "java7",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "path": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "version": "7.0.352"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 0.21,
+          "log": "logs/gradle-1.12/native-version.log"
+        }
+      ],
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-2.14.1",
+        "gradle": "2.14.1",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-2.14.1-bin.zip",
+        "gradleSha256": "cfc61eda71f2d12a572822644ce13d2919407595c2aec3e3566d2aab6f97ef39",
+        "managerRuntime": "java8",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-2.14.1/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 1.77,
+          "log": "logs/gradle-2.14.1/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-2.14.1/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-2.14.1/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.12,
+          "log": "logs/gradle-2.14.1/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "f856ac153bf4c6dfca0daae172fa8ada67d902ecb12a4ea5fd672e7288fa1c30",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-3.5.1",
+        "gradle": "3.5.1",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-3.5.1-bin.zip",
+        "gradleSha256": "8dce35f52d4c7b4a4946df73aa2830e76ba7148850753d8b5e94c5dc325ceef8",
+        "managerRuntime": "java8",
+        "projectCompiler": "java7",
+        "projectRuntime": "java7",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "path": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "version": "7.0.352"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "path": "/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352",
+          "version": "7.0.352"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-3.5.1/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 1.72,
+          "log": "logs/gradle-3.5.1/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-3.5.1/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-3.5.1/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.77,
+          "log": "logs/gradle-3.5.1/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "fd9b23aaba8f4e225b83f91dd41ab9e166456326926d7c1475db46c07c1748ce",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-4.10.3",
+        "gradle": "4.10.3",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-4.10.3-bin.zip",
+        "gradleSha256": "8626cbf206b4e201ade7b87779090690447054bc93f052954c78480fa6ed186e",
+        "managerRuntime": "java8",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-4.10.3/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 1.72,
+          "log": "logs/gradle-4.10.3/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-4.10.3/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-4.10.3/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.72,
+          "log": "logs/gradle-4.10.3/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "01d89b02f4c13f41de615d8e14fa3d90f905cffc58cf07052ac07822dbcbbd01",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-5.6.4",
+        "gradle": "5.6.4",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-5.6.4-bin.zip",
+        "gradleSha256": "1f3067073041bc44554d0efe5d402a33bc3d3c93cc39ab684f308586d732a80d",
+        "managerRuntime": "java11",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/d594jn2qn1ynzayxc7w13kfrrgr1jhyj-openjdk-headless-11.0.32.1+1/lib/openjdk",
+          "path": "/nix/store/d594jn2qn1ynzayxc7w13kfrrgr1jhyj-openjdk-headless-11.0.32.1+1",
+          "version": "11.0.32.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-5.6.4/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.37,
+          "log": "logs/gradle-5.6.4/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-5.6.4/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-5.6.4/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.97,
+          "log": "logs/gradle-5.6.4/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "5741e2d53373cb82a34674cd8491a3a70ae3585fc999f371fed7e332376d9b12",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-6.9.4",
+        "gradle": "6.9.4",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-6.9.4-bin.zip",
+        "gradleSha256": "3e240228538de9f18772a574e99a0ba959e83d6ef351014381acd9631781389a",
+        "managerRuntime": "java11",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/d594jn2qn1ynzayxc7w13kfrrgr1jhyj-openjdk-headless-11.0.32.1+1/lib/openjdk",
+          "path": "/nix/store/d594jn2qn1ynzayxc7w13kfrrgr1jhyj-openjdk-headless-11.0.32.1+1",
+          "version": "11.0.32.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-6.9.4/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.42,
+          "log": "logs/gradle-6.9.4/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-6.9.4/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-6.9.4/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 2.32,
+          "log": "logs/gradle-6.9.4/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "d4de7173ea1296c952afc794b40996ec32a837c65243c917a97a5c0add33c639",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-7.6.6",
+        "gradle": "7.6.6",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-7.6.6-bin.zip",
+        "gradleSha256": "673d9776f303bc7048fc3329d232d6ebf1051b07893bd9d11616fad9a8673be0",
+        "managerRuntime": "java17",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "maven-publish"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/ry8szmmd7pymhc0cgdnwf7mb5083j5mc-openjdk-headless-17.0.20.1+1/lib/openjdk",
+          "path": "/nix/store/ry8szmmd7pymhc0cgdnwf7mb5083j5mc-openjdk-headless-17.0.20.1+1",
+          "version": "17.0.20.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-7.6.6/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.87,
+          "log": "logs/gradle-7.6.6/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-7.6.6/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-7.6.6/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 5.27,
+          "log": "logs/gradle-7.6.6/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "9a2e819ea2a39e3381bde987e82b01eec09194152ba999b771ad9819ac071210",
+      "observedProbeInputs": null
+    },
+    {
+      "profile": {
+        "id": "gradle-8.14.3",
+        "gradle": "8.14.3",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
+        "gradleSha256": "bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531",
+        "managerRuntime": "java21",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "maven-publish"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk",
+          "path": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1",
+          "version": "21.0.12.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-8.14.3/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 3.02,
+          "log": "logs/gradle-8.14.3/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-8.14.3/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-8.14.3/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 6.57,
+          "log": "logs/gradle-8.14.3/purifier-lock.log"
+        },
+        {
+          "stage": "purifier-prefetch",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 1.32,
+          "log": "logs/gradle-8.14.3/purifier-prefetch.log"
+        },
+        {
+          "stage": "purifier-native-offline",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 4.22,
+          "log": "logs/gradle-8.14.3/purifier-native-offline.log"
+        },
+        {
+          "stage": "purifier-sandbox-tests",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 6.48,
+          "log": "logs/gradle-8.14.3/purifier-sandbox-tests.log"
+        },
+        {
+          "stage": "purifier-publish",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 5.92,
+          "log": "logs/gradle-8.14.3/purifier-publish.log"
+        }
+      ],
+      "nativeJarSha256": "38a994339629c19373e805c6961ad8976878207514c876446d15aba1d9978940",
+      "sourcePreserved": true,
+      "observedProbeInputs": {
+        "probe.py": "055915d6e71a6aa139c59bc802a7846d6710b167e1df9cdf4a2ffc070667ed74",
+        "profiles.json": "e566a6896f08658b9448c68279f7498ec45f6436299d4e12f6db0f8a76956613",
+        "sdks.nix": "e55b304fba600c72ec93458a7a5e7a09b1ba20f94e1627eea48bec49eccb7fdd"
+      }
+    },
+    {
+      "profile": {
+        "id": "gradle-9.8.2",
+        "gradle": "9.8.2",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip",
+        "gradleSha256": "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607",
+        "managerRuntime": "java21",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "maven-publish"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk",
+          "path": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1",
+          "version": "21.0.12.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.26,
+          "log": "logs/gradle-9.8.2/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.92,
+          "log": "logs/gradle-9.8.2/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-9.8.2/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-9.8.2/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 6.08,
+          "log": "logs/gradle-9.8.2/purifier-lock.log"
+        },
+        {
+          "stage": "purifier-prefetch",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 3.97,
+          "log": "logs/gradle-9.8.2/purifier-prefetch.log"
+        },
+        {
+          "stage": "purifier-native-offline",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 3.62,
+          "log": "logs/gradle-9.8.2/purifier-native-offline.log"
+        },
+        {
+          "stage": "purifier-sandbox-tests",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 5.22,
+          "log": "logs/gradle-9.8.2/purifier-sandbox-tests.log"
+        },
+        {
+          "stage": "purifier-publish",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 4.87,
+          "log": "logs/gradle-9.8.2/purifier-publish.log"
+        }
+      ],
+      "nativeJarSha256": "1f48f7f75f5b4d7670257321cd172b846c42509660b406ad759ece33d7dcfabf",
+      "sourcePreserved": true,
+      "observedProbeInputs": {
+        "probe.py": "055915d6e71a6aa139c59bc802a7846d6710b167e1df9cdf4a2ffc070667ed74",
+        "profiles.json": "e566a6896f08658b9448c68279f7498ec45f6436299d4e12f6db0f8a76956613",
+        "sdks.nix": "e55b304fba600c72ec93458a7a5e7a09b1ba20f94e1627eea48bec49eccb7fdd"
+      }
+    },
+    {
+      "profile": {
+        "id": "gradle-9.9.0-rc-1",
+        "gradle": "9.9.0-rc-1",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-9.9.0-rc-1-bin.zip",
+        "gradleSha256": "ef02c92a61020a0e4e0cfe2c8d6e00235538e0109e50364dd40f2065a267add3",
+        "managerRuntime": "java21",
+        "projectCompiler": "java8",
+        "projectRuntime": "java8",
+        "publication": "maven-publish"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk",
+          "path": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1",
+          "version": "21.0.12.1+1"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.26,
+          "log": "logs/gradle-9.9.0-rc-1/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.92,
+          "log": "logs/gradle-9.9.0-rc-1/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.16,
+          "log": "logs/gradle-9.9.0-rc-1/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-9.9.0-rc-1/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 6.02,
+          "log": "logs/gradle-9.9.0-rc-1/purifier-lock.log"
+        },
+        {
+          "stage": "purifier-prefetch",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 3.72,
+          "log": "logs/gradle-9.9.0-rc-1/purifier-prefetch.log"
+        },
+        {
+          "stage": "purifier-native-offline",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 3.47,
+          "log": "logs/gradle-9.9.0-rc-1/purifier-native-offline.log"
+        },
+        {
+          "stage": "purifier-sandbox-tests",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 5.52,
+          "log": "logs/gradle-9.9.0-rc-1/purifier-sandbox-tests.log"
+        },
+        {
+          "stage": "purifier-publish",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 4.92,
+          "log": "logs/gradle-9.9.0-rc-1/purifier-publish.log"
+        }
+      ],
+      "nativeJarSha256": "1f48f7f75f5b4d7670257321cd172b846c42509660b406ad759ece33d7dcfabf",
+      "sourcePreserved": true,
+      "observedProbeInputs": {
+        "probe.py": "055915d6e71a6aa139c59bc802a7846d6710b167e1df9cdf4a2ffc070667ed74",
+        "profiles.json": "e566a6896f08658b9448c68279f7498ec45f6436299d4e12f6db0f8a76956613",
+        "sdks.nix": "e55b304fba600c72ec93458a7a5e7a09b1ba20f94e1627eea48bec49eccb7fdd"
+      }
+    },
+    {
+      "profile": {
+        "id": "gradle-1.12-java6",
+        "gradle": "1.12",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+        "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+        "managerRuntime": "java6",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 0.21,
+          "log": "logs/gradle-1.12-java6/native-version.log"
+        }
+      ],
+      "observedProbeInputs": {
+        "probe.py": "055915d6e71a6aa139c59bc802a7846d6710b167e1df9cdf4a2ffc070667ed74",
+        "profiles.json": "d75f7de013a8a3636c86991d3969bce723a5f9b4da3b38240c3b5ebd7a3793c4",
+        "sdks.nix": "e55b304fba600c72ec93458a7a5e7a09b1ba20f94e1627eea48bec49eccb7fdd"
+      }
+    },
+    {
+      "profile": {
+        "id": "gradle-1.12-java8",
+        "gradle": "1.12",
+        "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+        "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+        "managerRuntime": "java8",
+        "projectCompiler": "java6",
+        "projectRuntime": "java6",
+        "publication": "legacy-upload"
+      },
+      "sdks": {
+        "managerRuntime": {
+          "home": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+          "path": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01",
+          "version": "8u504-b01"
+        },
+        "projectCompiler": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        },
+        "projectRuntime": {
+          "home": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "path": "/nix/store/2lqbdk5snkxf2751lb7ikzksi7sw17wj-gradle-epoch-zulu-6.0.119",
+          "version": "6.0.119"
+        }
+      },
+      "stages": [
+        {
+          "stage": "native-version",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.26,
+          "log": "logs/gradle-1.12-java8/native-version.log"
+        },
+        {
+          "stage": "native-build-test-publish",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 2.32,
+          "log": "logs/gradle-1.12-java8/native-build-test-publish.log"
+        },
+        {
+          "stage": "ordinary-compile",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.21,
+          "log": "logs/gradle-1.12-java8/ordinary-compile.log"
+        },
+        {
+          "stage": "ordinary-execute",
+          "outcome": "success",
+          "exitCode": 0,
+          "seconds": 0.03,
+          "log": "logs/gradle-1.12-java8/ordinary-execute.log"
+        },
+        {
+          "stage": "purifier-lock",
+          "outcome": "failed",
+          "exitCode": 1,
+          "seconds": 1.52,
+          "log": "logs/gradle-1.12-java8/purifier-lock.log"
+        }
+      ],
+      "nativeJarSha256": "f521efedcaf7d4a98a852acef4a74df6df64ae9d36a97aafc9112d02cd459a1f",
+      "sourcePreserved": true,
+      "observedProbeInputs": {
+        "probe.py": "055915d6e71a6aa139c59bc802a7846d6710b167e1df9cdf4a2ffc070667ed74",
+        "profiles.json": "d75f7de013a8a3636c86991d3969bce723a5f9b4da3b38240c3b5ebd7a3793c4",
+        "sdks.nix": "e55b304fba600c72ec93458a7a5e7a09b1ba20f94e1627eea48bec49eccb7fdd"
+      }
+    }
+  ]
+}

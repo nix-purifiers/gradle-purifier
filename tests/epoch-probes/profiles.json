@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "gradle-0.7",
+      "gradle": "0.7",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-0.7-bin.zip",
+      "gradleSha256": "4e354fcb0d5c0b0e7789cd6ee900456edaf993f6dd890c4a1c217d90d2a6a6ad",
+      "managerRuntime": "java6",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-0.9.2",
+      "gradle": "0.9.2",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-0.9.2-bin.zip",
+      "gradleSha256": "f94d7642348c558fc05ab5fd6fb947fb1ed8fed5931ddb73dd04fb0de22d669b",
+      "managerRuntime": "java6",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-1.12",
+      "gradle": "1.12",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+      "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+      "managerRuntime": "java7",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-2.14.1",
+      "gradle": "2.14.1",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-2.14.1-bin.zip",
+      "gradleSha256": "cfc61eda71f2d12a572822644ce13d2919407595c2aec3e3566d2aab6f97ef39",
+      "managerRuntime": "java8",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-3.5.1",
+      "gradle": "3.5.1",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-3.5.1-bin.zip",
+      "gradleSha256": "8dce35f52d4c7b4a4946df73aa2830e76ba7148850753d8b5e94c5dc325ceef8",
+      "managerRuntime": "java8",
+      "projectCompiler": "java7",
+      "projectRuntime": "java7",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-4.10.3",
+      "gradle": "4.10.3",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-4.10.3-bin.zip",
+      "gradleSha256": "8626cbf206b4e201ade7b87779090690447054bc93f052954c78480fa6ed186e",
+      "managerRuntime": "java8",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-5.6.4",
+      "gradle": "5.6.4",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-5.6.4-bin.zip",
+      "gradleSha256": "1f3067073041bc44554d0efe5d402a33bc3d3c93cc39ab684f308586d732a80d",
+      "managerRuntime": "java11",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-6.9.4",
+      "gradle": "6.9.4",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-6.9.4-bin.zip",
+      "gradleSha256": "3e240228538de9f18772a574e99a0ba959e83d6ef351014381acd9631781389a",
+      "managerRuntime": "java11",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-7.6.6",
+      "gradle": "7.6.6",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-7.6.6-bin.zip",
+      "gradleSha256": "673d9776f303bc7048fc3329d232d6ebf1051b07893bd9d11616fad9a8673be0",
+      "managerRuntime": "java17",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "maven-publish"
+    },
+    {
+      "id": "gradle-8.14.3",
+      "gradle": "8.14.3",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
+      "gradleSha256": "bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531",
+      "managerRuntime": "java21",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "maven-publish"
+    },
+    {
+      "id": "gradle-9.8.2",
+      "gradle": "9.8.2",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip",
+      "gradleSha256": "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607",
+      "managerRuntime": "java21",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "maven-publish"
+    },
+    {
+      "id": "gradle-9.9.0-rc-1",
+      "gradle": "9.9.0-rc-1",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-9.9.0-rc-1-bin.zip",
+      "gradleSha256": "ef02c92a61020a0e4e0cfe2c8d6e00235538e0109e50364dd40f2065a267add3",
+      "managerRuntime": "java21",
+      "projectCompiler": "java8",
+      "projectRuntime": "java8",
+      "publication": "maven-publish"
+    },
+    {
+      "id": "gradle-1.12-java6",
+      "gradle": "1.12",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+      "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+      "managerRuntime": "java6",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    },
+    {
+      "id": "gradle-1.12-java8",
+      "gradle": "1.12",
+      "gradleUrl": "https://services.gradle.org/distributions/gradle-1.12-bin.zip",
+      "gradleSha256": "8734b13a401f4311ee418173ed6ca8662d2b0a535be8ff2a43ecb1c13cd406ea",
+      "managerRuntime": "java8",
+      "projectCompiler": "java6",
+      "projectRuntime": "java6",
+      "publication": "legacy-upload"
+    }
+  ]
+}

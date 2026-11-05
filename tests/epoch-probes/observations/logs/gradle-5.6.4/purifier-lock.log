@@ -1,0 +1,5 @@
+["/nix/store/2p1d1z2isp7qwmjjp1xcc15ciinqa6nd-gradle-purifier/bin/gradle-purifier", "lock"]
+gradle-purifier: fetching https://services.gradle.org/distributions/gradle-5.6.4-bin.zip
+Error: LinkageError occurred while loading main class Recorder
+	java.lang.UnsupportedClassVersionError: Recorder has been compiled by a more recent version of the Java Runtime (class file version 61.0), this version of the Java Runtime only recognizes class file versions up to 55.0
+gradle-purifier: the recorder did not start

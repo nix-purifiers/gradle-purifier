@@ -1,0 +1,28 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-4.10.3/bin/gradle", "--version"]
+
+Welcome to Gradle 4.10.3!
+
+Here are the highlights of this release:
+ - Incremental Java compilation by default
+ - Periodic Gradle caches cleanup
+ - Gradle Kotlin DSL 1.0-RC6
+ - Nested included builds
+ - SNAPSHOT plugin versions in the `plugins {}` block
+
+For more details see https://docs.gradle.org/4.10.3/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 4.10.3
+------------------------------------------------------------
+
+Build time:   2018-12-05 00:50:54 UTC
+Revision:     e76905e3a1034e6f724566aeb985621347ff43bc
+
+Kotlin DSL:   1.0-rc-6
+Kotlin:       1.2.61
+Groovy:       2.4.15
+Ant:          Apache Ant(TM) version 1.9.11 compiled on March 23 2018
+JVM:          1.8.0_504 (Oracle Corporation 25.504-b01)
+OS:           Linux 7.2.11 amd64
+

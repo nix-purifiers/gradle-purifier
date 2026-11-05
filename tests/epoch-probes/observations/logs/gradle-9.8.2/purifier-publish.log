@@ -1,0 +1,221 @@
+["/nix/store/2p1d1z2isp7qwmjjp1xcc15ciinqa6nd-gradle-purifier/bin/gradle-purifier", "publish", "publishProofPublicationToMavenRepository"]
+Running phase: unpackPhase
+unpacking source archive /nix/store/1bf57whagqyb51kpawi06p873vw707na-gradle-source
+source root is gradle-source
+Running phase: patchPhase
+Running phase: updateAutotoolsGnuConfigScriptsPhase
+Running phase: buildPhase
+
+Welcome to Gradle 9.8.2!
+
+Here are the highlights of this release:
+ - Java 27 support
+ - Maven mirror settings reuse
+ - Linked problem locations in build output
+
+For more details see https://docs.gradle.org/9.8.2/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :compileJava FAILED
+
+[Incubating] Problems report is available at: file:///build/gradle-source/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Error while evaluating property 'javaCompiler' of task ':compileJava'.
+   > Failed to calculate the value of task ':compileJava' property 'javaCompiler'.
+      > The configured executable does not exist (/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk/bin/javac)
+
+* Try:
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeCatchingFailures(DefaultTaskNodeExecutor.java:231)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeWithFallbackOperationId(DefaultTaskNodeExecutor.java:197)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeWithLifecycle(DefaultTaskNodeExecutor.java:171)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.access$000(DefaultTaskNodeExecutor.java:67)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor$1.run(DefaultTaskNodeExecutor.java:136)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.execute(DefaultTaskNodeExecutor.java:133)
+        at org.gradle.execution.plan.LocalTaskNode.execute(LocalTaskNode.java:229)
+        at org.gradle.execution.DefaultBuildWorkExecutor.lambda$executePlan$0(DefaultBuildWorkExecutor.java:153)
+        at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.lambda$execute$0(DefaultPlanExecutor.java:476)
+        at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:85)
+        at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:475)
+        at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:392)
+        at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:65)
+        at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.api.internal.tasks.properties.PropertyEvaluationException: Error while evaluating property 'javaCompiler' of task ':compileJava'.
+        at org.gradle.api.internal.tasks.properties.InputParameterUtils.prepareInputParameterValue(InputParameterUtils.java:31)
+        at org.gradle.api.internal.tasks.execution.TaskExecution.lambda$visitMutableInputs$0(TaskExecution.java:347)
+        at org.gradle.internal.execution.impl.DefaultInputFingerprinter$InputCollectingVisitor.visitInputProperty(DefaultInputFingerprinter.java:120)
+        at org.gradle.api.internal.tasks.execution.TaskExecution.visitMutableInputs(TaskExecution.java:345)
+        at org.gradle.internal.execution.impl.DefaultInputFingerprinter.fingerprintInputProperties(DefaultInputFingerprinter.java:77)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.captureExecutionStateWithOutputs(CaptureMutableStateBeforeExecutionStep.java:124)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.lambda$captureExecutionState$0(CaptureMutableStateBeforeExecutionStep.java:94)
+        at org.gradle.internal.execution.steps.BuildOperationStep$1.call(BuildOperationStep.java:38)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+        at org.gradle.internal.execution.steps.BuildOperationStep.operation(BuildOperationStep.java:35)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.captureExecutionState(CaptureMutableStateBeforeExecutionStep.java:92)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.executeMutable(CaptureMutableStateBeforeExecutionStep.java:73)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
+        at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
+        at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
+        at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:90)
+        at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
+        at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+        at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+        at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:36)
+        at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:23)
+        at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+        at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+        at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+        at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+        at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$executeMutable$0(AssignMutableWorkspaceStep.java:34)
+        at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:314)
+        at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:30)
+        at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:21)
+        at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+        at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+        at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+        at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+        at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+        at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+        at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+        at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+        at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:56)
+        at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
+        at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.doExecute(DefaultTaskNodeExecutor.java:364)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeTrackingTaskIdentity(DefaultTaskNodeExecutor.java:332)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeFinalizingProperties(DefaultTaskNodeExecutor.java:318)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeSkippingWithNoActions(DefaultTaskNodeExecutor.java:289)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeSkippingOnlyIf(DefaultTaskNodeExecutor.java:272)
+        at org.gradle.api.internal.tasks.execution.DefaultTaskNodeExecutor.executeCatchingFailures(DefaultTaskNodeExecutor.java:228)
+        ... 20 more
+Caused by: org.gradle.api.internal.provider.AbstractProperty$PropertyQueryException: Failed to calculate the value of task ':compileJava' property 'javaCompiler'.
+        at org.gradle.api.internal.provider.AbstractProperty.finalizeNow(AbstractProperty.java:315)
+        at org.gradle.api.internal.provider.AbstractProperty.lambda$beforeRead$0(AbstractProperty.java:307)
+        at org.gradle.api.internal.provider.ValueState.finalizeOnReadIfNeeded(ValueState.java:142)
+        at org.gradle.api.internal.provider.AbstractProperty.beforeRead(AbstractProperty.java:307)
+        at org.gradle.api.internal.provider.AbstractProperty.beforeRead(AbstractProperty.java:299)
+        at org.gradle.api.internal.provider.AbstractProperty.calculateOwnValue(AbstractProperty.java:168)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.getOrNull(AbstractMinimalProvider.java:105)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.lambda$walkNestedProvider$0(AbstractTypeMetadataWalker.java:139)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedChild(AbstractTypeMetadataWalker.java:186)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedProvider(AbstractTypeMetadataWalker.java:138)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedProvider(AbstractTypeMetadataWalker.java:120)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker.walkNested(AbstractTypeMetadataWalker.java:59)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker.lambda$walkChildren$1(AbstractTypeMetadataWalker.java:87)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedChild(AbstractTypeMetadataWalker.java:192)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedChild(AbstractTypeMetadataWalker.java:173)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker$InstanceTypeMetadataWalker.walkNestedChild(AbstractTypeMetadataWalker.java:120)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker.lambda$walkChildren$0(AbstractTypeMetadataWalker.java:87)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker.walkChildren(AbstractTypeMetadataWalker.java:85)
+        at org.gradle.internal.properties.annotations.AbstractTypeMetadataWalker.walk(AbstractTypeMetadataWalker.java:53)
+        at org.gradle.internal.properties.bean.DefaultPropertyWalker.visitProperties(DefaultPropertyWalker.java:66)
+        at org.gradle.api.internal.tasks.TaskPropertyUtils.visitAnnotatedProperties(TaskPropertyUtils.java:58)
+        at org.gradle.api.internal.tasks.TaskPropertyUtils.visitProperties(TaskPropertyUtils.java:45)
+        at org.gradle.api.internal.tasks.properties.DefaultTaskProperties.resolve(DefaultTaskProperties.java:75)
+        at org.gradle.execution.plan.LocalTaskNode.getTaskProperties(LocalTaskNode.java:111)
+        at org.gradle.execution.plan.DefaultNodeValidator.validateNode(DefaultNodeValidator.java:58)
+        at org.gradle.execution.plan.DefaultNodeValidator.hasValidationProblems(DefaultNodeValidator.java:45)
+        at org.gradle.execution.plan.ResolveMutationsNode.resolveAndValidateMutations(ResolveMutationsNode.java:138)
+        at org.gradle.execution.plan.ResolveMutationsNode.access$000(ResolveMutationsNode.java:36)
+        at org.gradle.execution.plan.ResolveMutationsNode$1.run(ResolveMutationsNode.java:92)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+        at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+        at org.gradle.execution.plan.ResolveMutationsNode.execute(ResolveMutationsNode.java:88)
+        ... 7 more
+Caused by: org.gradle.api.InvalidUserDataException: The configured executable does not exist (/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk/bin/javac)
+        at org.gradle.jvm.toolchain.internal.JavaExecutableUtils.resolveExecutable(JavaExecutableUtils.java:44)
+        at org.gradle.jvm.toolchain.internal.JavaExecutableUtils.resolveJavaHomeOfExecutable(JavaExecutableUtils.java:54)
+        at org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaExecutable(SpecificInstallationToolchainSpec.java:80)
+        at org.gradle.api.internal.tasks.compile.JavaCompileExecutableUtils.getExecutableOverrideToolchainSpec(JavaCompileExecutableUtils.java:45)
+        at org.gradle.api.plugins.JavaBasePlugin.lambda$createCompileJavaTask$1(JavaBasePlugin.java:246)
+        at org.gradle.api.internal.provider.DefaultProvider.calculateOwnValue(DefaultProvider.java:73)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+        at org.gradle.api.internal.provider.OrElseFixedValueProvider.calculateOwnValue(OrElseFixedValueProvider.java:70)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+        at org.gradle.api.internal.provider.FlatMapProvider.calculateOwnValue(FlatMapProvider.java:49)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+        at org.gradle.api.internal.provider.TransformBackedProvider.calculateOwnValue(TransformBackedProvider.java:81)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+        at org.gradle.api.internal.provider.AbstractMinimalProvider.withFinalValue(AbstractMinimalProvider.java:169)
+        at org.gradle.api.internal.provider.DefaultProperty.finalValue(DefaultProperty.java:163)
+        at org.gradle.api.internal.provider.DefaultProperty.finalValue(DefaultProperty.java:33)
+        at org.gradle.api.internal.provider.AbstractProperty.finalizeNow(AbstractProperty.java:312)
+        ... 43 more
+
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 3s
+1 actionable task: 1 executed
+error: Cannot build '/nix/store/05w3v5avif5gnzxzfc0kcalhml03yx4n-epoch.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/bf1qlxx2a31gylprr7k2262g0cjml1am-epoch
+         /nix/store/crnkavqvg1mx4bfq0vbb7s6agyyzkha0-epoch-localPublications
+         /nix/store/k3zqmw9awmrgx653cnr7a0fbr8v0w5x0-epoch-maven
+         /nix/store/yhaz1z8v0yfzkm3c0wxhz997k5cw8p3c-epoch-runtime
+       Last 25 log lines:
+       >        at org.gradle.api.internal.tasks.compile.JavaCompileExecutableUtils.getExecutableOverrideToolchainSpec(JavaCompileExecutableUtils.java:45)
+       >      at org.gradle.api.plugins.JavaBasePlugin.lambda$createCompileJavaTask$1(JavaBasePlugin.java:246)
+       >        at org.gradle.api.internal.provider.DefaultProvider.calculateOwnValue(DefaultProvider.java:73)
+       >  at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+       >    at org.gradle.api.internal.provider.OrElseFixedValueProvider.calculateOwnValue(OrElseFixedValueProvider.java:70)
+       >        at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+       >    at org.gradle.api.internal.provider.FlatMapProvider.calculateOwnValue(FlatMapProvider.java:49)
+       >  at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+       >    at org.gradle.api.internal.provider.TransformBackedProvider.calculateOwnValue(TransformBackedProvider.java:81)
+       >  at org.gradle.api.internal.provider.AbstractMinimalProvider.calculateValue(AbstractMinimalProvider.java:115)
+       >    at org.gradle.api.internal.provider.AbstractMinimalProvider.withFinalValue(AbstractMinimalProvider.java:169)
+       >    at org.gradle.api.internal.provider.DefaultProperty.finalValue(DefaultProperty.java:163)
+       >        at org.gradle.api.internal.provider.DefaultProperty.finalValue(DefaultProperty.java:33)
+       >         at org.gradle.api.internal.provider.AbstractProperty.finalizeNow(AbstractProperty.java:312)
+       >     ... 43 more
+       >
+       >
+       > Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+       >
+       > You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+       >
+       > For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+       >
+       > BUILD FAILED in 3s
+       > 1 actionable task: 1 executed
+       For full logs, run:
+         nix log /nix/store/05w3v5avif5gnzxzfc0kcalhml03yx4n-epoch.drv
+error: Cannot build '/nix/store/ds4r0mhiry04f14jqy6sbc6vd40r22gf-epoch-release.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/8ncbfml0zxjqx4755cd2g64mg4rs1v8z-epoch-release
+gradle-purifier: Nix could not build the release of /run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-camso72a/capture/gradle-purifier.lock.json (see Nix's error above). A hash mismatch means the lockfile does not match what a URL serves: restore the lockfile from version control, or run 'gradle-purifier lock --relock' if the remote changed the file.

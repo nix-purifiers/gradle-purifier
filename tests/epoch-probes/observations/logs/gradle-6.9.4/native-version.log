@@ -1,0 +1,26 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-6.9.4/bin/gradle", "--version"]
+
+Welcome to Gradle 6.9.4!
+
+Here are the highlights of this release:
+ - This is a small backport release.
+ - Java 16 can be used to compile when used with Java toolchains
+ - Dynamic versions can be used within plugin declarations
+ - Native support for Apple Silicon processors
+
+For more details see https://docs.gradle.org/6.9.4/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 6.9.4
+------------------------------------------------------------
+
+Build time:   2023-02-22 08:43:12 UTC
+Revision:     7f9380f27d6dc6a1ee6dfc466b834b0408d0b0c4
+
+Kotlin:       1.4.20
+Groovy:       2.5.12
+Ant:          Apache Ant(TM) version 1.10.9 compiled on September 27 2020
+JVM:          11.0.32.1 (Oracle Corporation 11.0.32.1+0-adhoc..source)
+OS:           Linux 7.2.11 amd64
+

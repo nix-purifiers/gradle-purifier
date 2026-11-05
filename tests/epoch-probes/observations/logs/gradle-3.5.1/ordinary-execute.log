@@ -1,0 +1,1 @@
+["/nix/store/6rcbbbp1rhg555canrdmqjnqplhz90x9-gradle-epoch-zulu-7.0.352/bin/java", "-cp", "/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-g6ok83qo/ordinary:/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-g6ok83qo/native/repository/example/epoch/1.0/epoch-1.0.jar", "Consumer"]

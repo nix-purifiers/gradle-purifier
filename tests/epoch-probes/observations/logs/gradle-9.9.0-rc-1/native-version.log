@@ -1,0 +1,27 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-9.9.0-rc-1/bin/gradle", "--version"]
+
+Welcome to Gradle 9.9.0-rc-1!
+
+Here are the highlights of this release:
+ - Performance improvements for Kotlin DSL compilation
+ - Test filtering for non-method JUnit Platform tests
+ - Wrapper settings preserved on upgrade
+ - Predefined groups in the Problems API
+
+For more details see https://docs.gradle.org/9.9.0-rc-1/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 9.9.0-rc-1
+------------------------------------------------------------
+
+Build time:    2026-10-30 14:17:44 UTC
+Revision:      c155c8852d6a2abe15dc2b77a582a0cf6505afcb
+
+Kotlin:        2.4.21
+Groovy:        4.0.33
+Ant:           Apache Ant(TM) version 1.10.17 compiled on April 6 2026
+Launcher JVM:  21.0.12.1 (Oracle Corporation 21.0.12.1+1-nixos)
+Daemon JVM:    /nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk (no Daemon JVM specified, using current Java home)
+OS:            Linux 7.2.11 amd64
+

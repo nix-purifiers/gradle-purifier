@@ -1,0 +1,26 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-7.6.6/bin/gradle", "--version"]
+
+Welcome to Gradle 7.6.6!
+
+Here are the highlights of this release:
+ - Added support for Java 19.
+ - Introduced `--rerun` flag for individual task rerun.
+ - Improved dependency block for test suites to be strongly typed.
+ - Added a pluggable system for Java toolchains provisioning.
+
+For more details see https://docs.gradle.org/7.6.6/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 7.6.6
+------------------------------------------------------------
+
+Build time:   2025-07-04 10:34:26 UTC
+Revision:     c0be2570bd17666c8955ca5b66363f671f50bbd7
+
+Kotlin:       1.7.10
+Groovy:       3.0.13
+Ant:          Apache Ant(TM) version 1.10.13 compiled on January 4 2023
+JVM:          17.0.20.1 (Oracle Corporation 17.0.20.1+1-nixos)
+OS:           Linux 7.2.11 amd64
+

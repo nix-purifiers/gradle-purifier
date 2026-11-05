@@ -1,0 +1,13 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-0.9.2/bin/gradle", "--version"]
+
+------------------------------------------------------------
+Gradle 0.9.2
+------------------------------------------------------------
+
+Gradle build time: Sunday, 23 January 2011 01:34:21 PM EST
+Groovy: 1.7.6
+Ant: Apache Ant version 1.8.1 compiled on April 30 2010
+Ivy: 2.2.0
+JVM: 1.6.0-119 (Azul Systems, Inc. 23.77-b119)
+OS: Linux 7.2.11 amd64
+
