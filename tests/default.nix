@@ -110,13 +110,14 @@ let
 in
 {
   snapshot-groovy-tests = snapshotGroovy.tests;
-  snapshot-groovy-publication = expectFiles "snapshot-groovy-publication"
-    snapshotGroovy.packages.snapshot-groovy.maven [
-      "nix-support/artifacts/maven/descriptor"
-      "nix-support/artifacts/maven/module"
-      "nix-support/artifacts/maven/snapshot-groovy.jar"
-      "nix-support/artifacts/maven/snapshot-groovy-sources.jar"
-    ];
+  snapshot-groovy-publication =
+    expectFiles "snapshot-groovy-publication" snapshotGroovy.packages.snapshot-groovy.maven
+      [
+        "nix-support/artifacts/maven/descriptor"
+        "nix-support/artifacts/maven/module"
+        "nix-support/artifacts/maven/snapshot-groovy.jar"
+        "nix-support/artifacts/maven/snapshot-groovy-sources.jar"
+      ];
   publication-unit = runCommand "publication-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     mkdir -p tests nix/lib
     cp ${./test_normalize_publications.py} tests/test_normalize_publications.py
@@ -128,7 +129,8 @@ in
     let
       first = snapshotGroovy.packages.snapshot-groovy;
       again = first.overrideAttrs { PURIFIER_SNAPSHOT_REBUILD = "1"; };
-    in runCommand "snapshot-groovy-rebuild" { } ''
+    in
+    runCommand "snapshot-groovy-rebuild" { } ''
       diff -r ${first.maven} ${again.maven}
       touch $out
     '';
