@@ -22,7 +22,7 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     expression = '''let
       f = builtins.getFlake ("path:" + builtins.getEnv "GRADLE_TELEMETRY_SOURCE");
-      p = import f.inputs.nixpkgs { system = builtins.currentSystem; };
+      p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
       describe = j: let context = builtins.getContext (toString j); in {
         path = toString j; home = j.home or "${j}/lib/openjdk";
         version = j.version; drvPath = j.drvPath; inherit context;

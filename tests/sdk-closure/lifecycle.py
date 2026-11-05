@@ -73,7 +73,7 @@ def main():
     run('split-prefetch',[cli,'prefetch'],project)
     # Runtime diagnostic state must not affect a sandboxed producer identity.
     identity_expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
-      p=import f.inputs.nixpkgs {system=builtins.currentSystem;overlays=[f.overlays.default];};
+      p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};
       in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "SDK_PROJECT";}).tests.drvPath'''
     identities=[]
     state=project/'.gradle-purifier/runtime-diagnostic-variance.json'
@@ -89,7 +89,7 @@ def main():
     run('split-offline-warm',[shutil.which('bash'),gradle,'--offline','--no-daemon','check'],project,dict(GRADLE_PURIFIER_SDK_TRACE='1'))
     assert 'GRADLE-SDK-VALIDATED :compileJava/compiler '+sdks['java8']['home'] in (out/'split-offline.log').read_text()
     expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
-      p=import f.inputs.nixpkgs {system=builtins.currentSystem;overlays=[f.overlays.default];};
+      p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};
       in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "SDK_PROJECT";}).tests'''
     run('split-sandbox',['nix','build','--impure','--no-link','--print-build-logs','--expr',expression],project,
         dict(SDK_SOURCE=str(ROOT),SDK_PROJECT=str(project)))

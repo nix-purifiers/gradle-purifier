@@ -72,7 +72,9 @@ def check = { row ->
         }
         return
     }
-    def recorded = expected.roles.find { it.task == row.task && it.role == row.role }
+    def matches = expected.roles.findAll { it.task == row.task && it.role == row.role }
+    if (matches.size() > 1) throw new GradleException("gradle-purifier: ambiguous SDK task role ${row.task}/${row.role}; run 'gradle-purifier lock --relock -- ${row.task}'")
+    def recorded = matches ? matches[0] : null
     if (!recorded) throw new GradleException("gradle-purifier: SDK role ${row.task}/${row.role} was not selected by the lock; run 'gradle-purifier lock --relock -- ${row.task}'")
     if (row.home != row.canonicalHome || row.home != recorded.home || row.executable != row.canonicalExecutable) {
         throw new GradleException("gradle-purifier: ${row.task} selected an SDK that differs from its immutable lock; select the recorded Nix SDK and run 'gradle-purifier lock --relock -- ${row.task}'")

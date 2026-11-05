@@ -6,6 +6,14 @@ let
     message:
     throw "gradle-purifier: ${message}; run 'gradle-purifier lock --relock' with the project's native tasks and declared Nix SDKs.";
   context = contexts.${system} or (problem "the project SDK lock has no context for ${system}");
+  ids = map (sdk: sdk.identityHash) context.sdks;
+  roleKeys = map (
+    role:
+    builtins.toJSON [
+      role.task
+      role.role
+    ]
+  ) context.roles;
   resolve =
     record:
     let
@@ -46,6 +54,15 @@ let
     }
   ) context.roles;
 in
+assert
+  builtins.length ids == builtins.length (lib.unique ids)
+  || problem "duplicate project SDK identities";
+assert
+  builtins.length roleKeys == builtins.length (lib.unique roleKeys)
+  || problem "duplicate project SDK task roles";
+assert
+  lib.all (role: builtins.elem role.sdk ids) context.roles
+  || problem "project SDK role references an unknown identity";
 {
   inherit jdks roles;
 }

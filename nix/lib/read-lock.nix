@@ -61,6 +61,7 @@ let
       || (isString (a.path or null) && isString (a.contents or null))
     );
 
+  isIdentityHash = value: isString value && match "[0-9a-f]{64}" value != null;
   isSdkSource =
     source:
     isAttrs source
@@ -69,7 +70,8 @@ let
     && source.repo or null == "nixpkgs"
     && isString (source.rev or null)
     && match "[0-9a-f]{40}" source.rev != null
-    && isString (source.narHash or null);
+    && isString (source.narHash or null)
+    && match "sha256-[A-Za-z0-9+/]{43}=" source.narHash != null;
   isSdk =
     sdk:
     isAttrs sdk
@@ -79,7 +81,7 @@ let
     && lib.all isString sdk.attribute
     && isString (sdk.output or null)
     && isString (sdk.home or null)
-    && isString (sdk.identityHash or null);
+    && isIdentityHash (sdk.identityHash or null);
   isSdkRole =
     role:
     isAttrs role
@@ -89,7 +91,7 @@ let
       "launcher"
       "javadoc"
     ]
-    && isString (role.sdk or null)
+    && isIdentityHash (role.sdk or null)
     && role.provenance or null == "resolved-selected-provider";
   isSdkContext =
     context:
@@ -98,9 +100,38 @@ let
     && lib.all isSdk context.sdks
     && isList (context.roles or null)
     && lib.all isSdkRole context.roles;
-  validProjectJdks =
-    !(raw ? projectJdks)
-    || (isAttrs raw.projectJdks && lib.all isSdkContext (builtins.attrValues raw.projectJdks));
+  sdkContextProblem =
+    context:
+    if !isSdkContext context then
+      "has malformed project SDK contexts"
+    else
+      let
+        ids = map (sdk: sdk.identityHash) context.sdks;
+        roleKeys = map (
+          role:
+          toJSON [
+            role.task
+            role.role
+          ]
+        ) context.roles;
+      in
+      if builtins.length ids != builtins.length (lib.unique ids) then
+        "has duplicate project SDK identities"
+      else if builtins.length roleKeys != builtins.length (lib.unique roleKeys) then
+        "has duplicate project SDK task roles"
+      else if !(lib.all (role: builtins.elem role.sdk ids) context.roles) then
+        "has a project SDK role referencing an unknown SDK identity"
+      else
+        null;
+  projectJdkProblem =
+    if !(raw ? projectJdks) then
+      null
+    else if !isAttrs raw.projectJdks then
+      "has malformed project SDK contexts"
+    else
+      lib.findFirst (message: message != null) null (
+        map sdkContextProblem (builtins.attrValues raw.projectJdks)
+      );
 
   # The first problem of the lockfile's structure, or null.
   structureProblem =
@@ -125,8 +156,8 @@ let
       "lacks a field of a gradle-purifier lockfile"
     else if !(lib.all isArtifact raw.artifacts) then
       "has an artifact that is neither { url, hash } nor { path, contents }"
-    else if !validProjectJdks then
-      "has malformed project SDK contexts"
+    else if projectJdkProblem != null then
+      projectJdkProblem
     else if contentHashOf raw != raw.contentHash then
       "does not match its contentHash, so it was edited"
     else

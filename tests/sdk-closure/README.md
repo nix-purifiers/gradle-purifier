@@ -35,7 +35,9 @@ derivation unchanged.
 Negative tests distinguish ambient paths, an alias before and after retarget,
 identical release metadata from a different Nix output, lock-content and Nix
 identity tampering, wrong platform context, and a foreign SDK absent from a
-legacy lock. The different-output fixture contains release metadata and empty
+legacy lock. Rehashed duplicate SDK identities, duplicate task roles, unknown
+SDK references and malformed identity/source hashes are rejected directly by
+`readLock`, before typed SDK reconstruction. The different-output fixture contains release metadata and empty
 placeholder binaries: it is not a runnable SDK and proves no native substitution
 behavior. The old explicit `toolchainJdks` API has a separate positive check;
 Nix-context-bearing values with an ambient home are rejected.
