@@ -374,7 +374,13 @@ daemon/cache features. Publication preserves inherited daemon and build-cache
 settings while disabling the configuration cache when supported. Prefetch materializes the locked toolchain and
 installs its init script; it does not run this probe or replace the native launcher.
 
-This adapts CLI controls only. The measured Gradle 2.14.1 control still fails on
+The interactive missing-download hint uses the native Flow APIs when all required
+classes are available. Older runtimes use a separate completion listener. Both
+adapters preserve the native failure and print the same hint once; errors applying
+a present Flow adapter remain failures. Companions are loaded beside the immutable
+common init script only for the root interactive build.
+
+Native help selection adapts CLI controls only. The measured Gradle 2.14.1 control still fails on
 unavailable init-script APIs; older publication APIs remain separate compatibility
 work. Successful help inspection does not establish a historical support range.
 
