@@ -1,0 +1,2 @@
+# Preserve raw diagnostic output, including Gradle's own trailing whitespace.
+logs/** -whitespace
