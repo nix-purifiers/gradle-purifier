@@ -417,3 +417,12 @@ gradle-purifier prefetch
 
 The purifier idea was inspired by nixcloud's
 [cargo (libnix)](https://github.com/nixcloud/cargo).
+
+External links on standard Javadoc tasks are captured as pinned `element-list`
+or `package-list` inputs. Replay retains the original public documentation URL,
+including when the metadata server is unavailable. `lock --relock` preserves the
+pinned metadata; `update` refreshes it. These links currently require
+credential-free HTTP(S) directory URLs with DNS names or IPv4 hosts, without
+queries, fragments or traversal segments. IPv6 hosts are rejected before capture
+or replay because the repository mapper does not support their authority syntax.
+Custom doclets and other remote Javadoc inputs are outside this capture path.

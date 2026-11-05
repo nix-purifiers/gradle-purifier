@@ -153,17 +153,17 @@ class PurifierJavadocMetadata {
         URI uri
         try { uri = URI.create(value) }
         catch (IllegalArgumentException error) {
-            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL', error)
+            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL with a DNS name or IPv4 host (IPv6 is not supported)', error)
         }
         def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
-        if (!(uri.scheme?.toLowerCase(Locale.ROOT) in ['http', 'https']) || !uri.host || uri.userInfo != null ||
+        if (!(uri.scheme?.toLowerCase(Locale.ROOT) in ['http', 'https']) || !uri.host || uri.host.startsWith('[') || uri.userInfo != null ||
             uri.rawQuery != null || uri.rawFragment != null || uri.normalize() != uri ||
             uri.port > 65535 || uri.rawAuthority != authority || uri.rawAuthority.contains('%') ||
             uri.path.contains('//') ||
             uri.path.contains('\\') || uri.path.tokenize('/').any { it in ['.', '..'] } ||
             value.any { Character.isISOControl((char) it) } ||
             uri.path.any { Character.isISOControl((char) it) }) {
-            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL')
+            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL with a DNS name or IPv4 host (IPv6 is not supported)')
         }
         uri
     }

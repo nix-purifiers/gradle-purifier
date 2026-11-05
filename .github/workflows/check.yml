@@ -189,3 +189,58 @@ jobs:
             ${{ runner.temp }}/gradle-sdk-proof/lifecycle/*.log
             ${{ runner.temp }}/gradle-sdk-proof/negative/*.json
             ${{ runner.temp }}/gradle-sdk-proof/negative/*.log
+
+  javadoc-link-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Record Javadoc proof identity
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-javadoc-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-javadoc-proof/source-revision"
+          python3 - <<'PYTHON'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          hashes = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest()
+                    for name in files if name and Path(name).is_file()}
+          (Path(os.environ['RUNNER_TEMP'])/'gradle-javadoc-proof/source-hashes.json').write_text(
+              json.dumps(hashes, indent=2) + '\n')
+          PYTHON
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build candidate
+        run: nix build .#default --out-link "$RUNNER_TEMP/gradle-javadoc-candidate"
+      - name: Preserve marked metadata and ordinary binary downloads
+        run: |
+          python3 tests/javadoc-recorder-bytes.py \
+            "$RUNNER_TEMP/gradle-javadoc-candidate/bin/gradle-purifier" \
+            --results "$RUNNER_TEMP/gradle-javadoc-proof/recorder"
+      - name: Capture native Javadoc then replay with its metadata server stopped
+        run: |
+          python3 tests/javadoc-native.py \
+            "$RUNNER_TEMP/gradle-javadoc-candidate/bin/gradle-purifier" \
+            --results "$RUNNER_TEMP/gradle-javadoc-proof/native"
+      - name: Reject rehashed malformed metadata roles before replay
+        run: |
+          python3 tests/javadoc-resource-schema.py \
+            --project "$RUNNER_TEMP/gradle-javadoc-proof/native/project" \
+            --results "$RUNNER_TEMP/gradle-javadoc-proof/schema"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-javadoc-link-metadata
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/gradle-javadoc-proof/source-revision
+            ${{ runner.temp }}/gradle-javadoc-proof/source-hashes.json
+            ${{ runner.temp }}/gradle-javadoc-proof/recorder/*.json
+            ${{ runner.temp }}/gradle-javadoc-proof/recorder/*.tsv
+            ${{ runner.temp }}/gradle-javadoc-proof/recorder/*.log
+            ${{ runner.temp }}/gradle-javadoc-proof/native/*.json
+            ${{ runner.temp }}/gradle-javadoc-proof/native/*.log
+            ${{ runner.temp }}/gradle-javadoc-proof/schema/*.json
