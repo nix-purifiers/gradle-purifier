@@ -75,6 +75,21 @@ public final class RecorderTest {
         "a POM is not mutable",
         false,
         Recorder.isMutable(URI.create("https://host/m2/org/a/1/a-1.pom")));
+    expect("generic element-list stays hashed", false,
+        Recorder.isMutable(URI.create("https://host/api/element-list")));
+    expect("generic package-list stays hashed", false,
+        Recorder.isMutable(URI.create("https://host/api/package-list")));
+
+    expect("marked Javadoc metadata is selected", true,
+        Recorder.isJavadocMetadata(URI.create("https://host/api/package-list"), "javadoc-link-metadata"));
+    expect("unmarked metadata is ordinary", false,
+        Recorder.isJavadocMetadata(URI.create("https://host/api/package-list"), null));
+    expect("marker cannot inline another filename", false,
+        Recorder.isJavadocMetadata(URI.create("https://host/api/body.bin"), "javadoc-link-metadata"));
+    expect("non-UTF8 metadata cannot be inline text", false,
+        Recorder.isUtf8(new byte[] {(byte) 0xff, 0, (byte) 0x80}));
+    expect("UTF8 metadata can be inline text", true,
+        Recorder.isUtf8("external\n".getBytes(StandardCharsets.UTF_8)));
 
     // Maven Central's files, under either of its names, have Google's mirror.
     expect(

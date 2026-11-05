@@ -241,6 +241,7 @@ konan_download_urls() {
 # URL.
 artifacts_json() {
   jq -R -s 'split("\n") | map(select(length > 0) | split("\t"))
+    | sort_by(.[0], (if .[1] == "inline" then 0 else 1 end))
     | unique_by(.[0])
     | map(if .[1] == "inline" then {path: .[0], contents: (.[2] | @base64d)}
           else {url: .[1], hash: .[2]} end)' "$1"
@@ -366,7 +367,7 @@ update_command() {
   elif uses_dependency_locking; then
     update_args=(--write-locks)
   fi
-  if [ ${#packages[@]} = 0 ]; then refresh_inputs=(--refresh); fi
+  if [ ${#packages[@]} = 0 ]; then refresh_inputs=(--refresh); resource_refresh=1; fi
   run_lock "$(lock_java "$java_major")" "$state/pinned.tsv" 1 "${gradle_args[@]}"
 }
 
@@ -493,6 +494,8 @@ run_lock() {
       GRADLE_PURIFIER_BUILD_ROOT=$work/build \
       GRADLE_PURIFIER_REPOSITORY=$base \
       GRADLE_PURIFIER_OUTPUT=$work/output \
+      GRADLE_PURIFIER_RESOURCES=$lockfile \
+      GRADLE_PURIFIER_RESOURCE_REFRESH=${resource_refresh:-} \
       JAVA_HOME=$java \
       "$gradle_home/bin/gradle" \
       --init-script "$lib/purifier.init.gradle" \
@@ -534,12 +537,18 @@ run_lock() {
   # go to jq as a file.
   artifacts_json "$records" >"$work/artifacts.json"
   python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json"
+  if [ -d "$work/output/external-resources" ]; then
+    jq -s 'add | sort_by(.build, .task, .linkUrl)' "$work/output/external-resources/"*.json >"$work/resources.json"
+  else
+    echo '[]' >"$work/resources.json"
+  fi
   jq -n \
     --argjson version "$lock_version" \
     --slurpfile projectInputs "$work/inputs.json" \
     --slurpfile projectJdks "$work/project-jdks.json" \
     --slurpfile described "$work/output/projects.json" \
     --slurpfile artifacts "$work/artifacts.json" \
+    --slurpfile resources "$work/resources.json" \
     --arg distribution "$(tree_path "$url")" \
     --arg inputsHash "$hash" \
     --argjson konanHost "$(lock_konan_host "$records")" \
@@ -556,7 +565,8 @@ run_lock() {
       projects: $described[0].projects,
       artifacts: $artifacts[0]
     } | if ($projectJdks[0] | length) > 0 then . + {projectJdks: $projectJdks[0]} else . end
-      | if ($projectInputs[0] | length) > 0 then . + {projectInputs: $projectInputs[0]} else . end' >"$work/lock.json"
+      | if ($projectInputs[0] | length) > 0 then . + {projectInputs: $projectInputs[0]} else . end
+      | if ($resources[0] | length) > 0 then . + {resources: $resources[0]} else . end' >"$work/lock.json"
   mkdir -p "$(dirname "$lockfile")"
   jq --arg contentHash "$(content_hash "$work/lock.json")" '.contentHash = $contentHash' \
     "$work/lock.json" >"$lockfile.tmp"
@@ -644,6 +654,7 @@ prefetch_command() {
     fi
     echo "portal=file://$tree/$portal"
     echo "gradle.purifier.repository=file://$tree"
+    echo "gradle.purifier.resources=$lockfile"
     if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
       echo "gradle.purifier.provided.repository=$state/provided"
       echo "gradle.purifier.provided.catalog=$state/input-metadata/catalog.json"

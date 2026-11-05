@@ -288,6 +288,9 @@ let
     export GRADLE_PURIFIER_MODE=sandbox
     export GRADLE_PURIFIER_BUILD_ROOT="$PWD"
     export GRADLE_PURIFIER_REPOSITORY=file://${repository}
+    export GRADLE_PURIFIER_RESOURCES=${
+      writeText "gradle-external-resources.json" (builtins.toJSON (gradle.resources or [ ]))
+    }
     ${lib.optionalString (projectDependencies != [ ]) ''
       export GRADLE_PURIFIER_PROVIDED_REPOSITORY=${provided.maven}
       export GRADLE_PURIFIER_PROVIDED_CATALOG=${provided.maven.catalog}

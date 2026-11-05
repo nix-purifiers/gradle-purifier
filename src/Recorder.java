@@ -19,6 +19,9 @@ import java.net.URLDecoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -445,7 +448,9 @@ public final class Recorder {
     long length = response.headers().firstValueAsLong("Content-Length").orElse(-1);
 
     MessageDigest sha256 = sha256();
-    ByteArrayOutputStream contents = isMutable(remote) ? new ByteArrayOutputStream() : null;
+    ByteArrayOutputStream contents =
+        isMutable(remote) || isJavadocMetadata(remote, exchange.getRequestHeaders().getFirst("X-Gradle-Purifier-Resource"))
+            ? new ByteArrayOutputStream() : null;
     try (InputStream body = response.body()) {
       if (method.equals("HEAD")) {
         long read = drain(body, sha256, contents);
@@ -551,6 +556,24 @@ public final class Recorder {
     return path.substring(path.lastIndexOf('/') + 1).startsWith("maven-metadata");
   }
 
+  /** Only the native Javadoc preparation request can opt these metadata files into inline pins. */
+  static boolean isJavadocMetadata(URI remote, String resourceKind) {
+    String path = remote.getPath();
+    if (!"javadoc-link-metadata".equals(resourceKind) || path == null) return false;
+    String filename = path.substring(path.lastIndexOf('/') + 1);
+    return filename.equals("element-list") || filename.equals("package-list");
+  }
+
+  static boolean isUtf8(byte[] bytes) {
+    try {
+      StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes));
+      return true;
+    } catch (CharacterCodingException e) {
+      return false;
+    }
+  }
+
   /**
    * Records a fetched file: by its hash, or by its contents when `contents` holds them. A
    * contents record has "inline" in place of the URL and the contents in Base64 in place of the
@@ -562,6 +585,9 @@ public final class Recorder {
     if (path.endsWith("/")) {
       return;
     }
+    // Generic downloads keep URL/hash representation. Marked Javadoc metadata
+    // may be inline only when JSON's UTF-8 text representation preserves every byte.
+    if (contents != null && !isMutable(remote) && !isUtf8(contents.toByteArray())) contents = null;
     if (contents != null) {
       record(path, "inline", Base64.getEncoder().encodeToString(contents.toByteArray()), "");
     } else {
