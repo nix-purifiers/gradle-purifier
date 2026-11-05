@@ -33,11 +33,15 @@ def select(mode, text):
     headings = re.findall(r'(?m)^([A-Z][A-Za-z -]+):\s*$', text[usage.end():])
     categorized = ['Help', 'Logging', 'Console', 'Configuration', 'Execution', 'Performance',
                    'Security', 'Diagnostics', 'Daemon', 'Develocity']
+    categorized_951 = [heading for heading in categorized if heading != 'Console']
     complete = rows and ((not headings and '--exclude-task' in rows[-1]) or
-                         (headings == categorized and '--no-scan' in rows[-1]))
+                         (headings in [categorized, categorized_951] and '--no-scan' in rows[-1]))
     if not {'--help', '--version', '--init-script', '--exclude-task'} <= options or not complete:
         raise ValueError('native Gradle help is incomplete or has an unsupported format')
-    features = ['daemon', 'configuration-cache', 'build-cache']
+    # Publication reuses the developer's daemon/cache policy, as before.
+    # Forcing a fresh daemon can contend with an IDE daemon in another
+    # network namespace sharing this Gradle user home.
+    features = ['configuration-cache'] if mode == 'publish' else ['daemon', 'configuration-cache', 'build-cache']
     if mode == 'sandbox':
         features.append('watch-fs')
     result = []

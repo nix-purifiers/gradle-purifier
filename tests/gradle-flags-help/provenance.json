@@ -16,9 +16,7 @@
           "--no-daemon",
           "--console=plain"
         ],
-        "publish": [
-          "--no-daemon"
-        ]
+        "publish": []
       },
       "nativeHelpDidNotLoadInitOrTasks": true,
       "selectedFlagsAcceptedByNativeParser": true
@@ -45,9 +43,7 @@
           "--console=plain"
         ],
         "publish": [
-          "--no-daemon",
-          "--no-configuration-cache",
-          "--no-build-cache"
+          "--no-configuration-cache"
         ]
       },
       "nativeHelpDidNotLoadInitOrTasks": true,
@@ -75,9 +71,35 @@
           "--console=plain"
         ],
         "publish": [
+          "--no-configuration-cache"
+        ]
+      },
+      "nativeHelpDidNotLoadInitOrTasks": true,
+      "selectedFlagsAcceptedByNativeParser": true
+    },
+    {
+      "profile": "gradle-9.5.1",
+      "managerHome": "/nix/store/ry8szmmd7pymhc0cgdnwf7mb5083j5mc-openjdk-headless-17.0.20.1+1/lib/openjdk",
+      "managerVersion": "17.0.20.1+1",
+      "distributionUrl": "https://services.gradle.org/distributions/gradle-9.5.1-bin.zip",
+      "distributionSha256": "bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f",
+      "helpSha256": "d6c91da64d1330636bd251042fc354d1a01a9ab05d1c04268fdeb53b5eadffb3",
+      "flags": {
+        "capture": [
           "--no-daemon",
           "--no-configuration-cache",
-          "--no-build-cache"
+          "--no-build-cache",
+          "--console=plain"
+        ],
+        "sandbox": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache",
+          "--no-watch-fs",
+          "--console=plain"
+        ],
+        "publish": [
+          "--no-configuration-cache"
         ]
       },
       "nativeHelpDidNotLoadInitOrTasks": true,

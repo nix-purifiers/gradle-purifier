@@ -368,8 +368,10 @@ Custom doclets and other remote Javadoc inputs are outside this capture path.
 For capture, sandboxed builds and publication, Gradle controls come from the
 selected distribution's native `--help` under its selected JDK. The selector recognizes the observed flat and categorized
 help layouts. Failed, unknown, ambiguous or incomplete help probes stop explicitly
-before the build. Daemon/cache enable arguments are rejected, and required disable
-flags follow user arguments. Prefetch materializes the locked toolchain and
+before the build. Explicit daemon/cache enable arguments are rejected, and required
+disable flags follow user arguments. Capture and sandboxed builds disable supported
+daemon/cache features. Publication preserves inherited daemon and build-cache
+settings while disabling the configuration cache when supported. Prefetch materializes the locked toolchain and
 installs its init script; it does not run this probe or replace the native launcher.
 
 This adapts CLI controls only. The measured Gradle 2.14.1 control still fails on
