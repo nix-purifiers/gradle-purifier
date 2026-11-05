@@ -462,8 +462,10 @@ run_lock() {
   # Empty jdk.http.auth.*.disabledSchemes let the recorder send the Basic
   # credentials of an https_proxy URL to the proxy, for HTTPS tunnels and
   # for plain HTTP alike.
+  # The recorder is a purifier process with Java 17 bytecode/APIs. Keep it
+  # on the bundled runtime while Gradle uses the project-selected JDK below.
   GRADLE_PURIFIER_PINNED=$pins \
-    "$java/bin/java" -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes= \
+    "$default_java/bin/java" -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes= \
     -cp "$recorder" Recorder "$records" "$work/port" "${konan_hosts[@]}" &
   local recorder_pid=$!
   # shellcheck disable=SC2064 # the PID is known now
