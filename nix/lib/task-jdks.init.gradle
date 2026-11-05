@@ -58,6 +58,12 @@ def inspectSelection = { task ->
     // Javadoc fallback is introduced by the executable adapter.
     if (task instanceof Javadoc && task.executable) executable = new File(task.executable)
     def home = executable.absoluteFile.parentFile.parentFile
+    if (explicit != null && role in ['compiler', 'launcher']) {
+        def binary = role == 'compiler' ? 'javac' : 'java'
+        if (explicit.absolutePath != new File(home, 'bin/' + binary).absolutePath) {
+            throw new GradleException("gradle-purifier: ${task.path} explicit executable does not match its ${role} SDK role")
+        }
+    }
     if (tool != null && explicit != null && home.canonicalPath != tool.metadata.installationPath.asFile.canonicalPath) {
         throw new GradleException("gradle-purifier: ${task.path} selects conflicting provider and explicit SDKs; select one immutable SDK and relock")
     }
