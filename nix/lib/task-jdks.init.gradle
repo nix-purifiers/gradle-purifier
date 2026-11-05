@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: MIT
+// Selected SDK roles are stable lock inputs. Runtime task outcomes stay diagnostic.
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.javadoc.Javadoc
+
+def mode = System.getenv('GRADLE_PURIFIER_MODE') ?: System.getProperty('gradle.purifier.mode')
+if (!mode) return
+def contextPath = System.getenv('GRADLE_PURIFIER_JDK_CONTEXT') ?: System.getProperty('gradle.purifier.jdk.context')
+def expected = contextPath ? new JsonSlurper().parse(new File(contextPath)) : null
+if (expected) {
+    gradle.startParameter.projectProperties = gradle.startParameter.projectProperties + [
+        'org.gradle.java.installations.auto-detect': 'false',
+        'org.gradle.java.installations.auto-download': 'false',
+        'org.gradle.java.installations.paths': expected.paths.join(',')]
+}
+def isRootSdkBuild = {
+    def explicit = System.getenv('GRADLE_PURIFIER_BUILD_ROOT') ?: System.getProperty('gradle.purifier.sdk.root')
+    def outermost = gradle
+    while (outermost.parent != null) outermost = outermost.parent
+    def root = explicit ? new File(explicit) : outermost.startParameter.currentDir
+    root.canonicalPath == gradle.rootProject.projectDir.canonicalPath
+}
+def rows = []
+def observations = Collections.synchronizedMap([:])
+def captureOutput = System.getenv('GRADLE_PURIFIER_OUTPUT')
+def roleOf = { task ->
+    task instanceof JavaCompile ? 'compiler' : task instanceof Javadoc ? 'javadoc' :
+        (task instanceof Test || task instanceof JavaExec) ? 'launcher' : null
+}
+def inspectSelection = { task ->
+    def role = roleOf(task)
+    if (!role) return null
+    def providerName = role == 'compiler' ? 'javaCompiler' : role == 'javadoc' ? 'javadocTool' : 'javaLauncher'
+    if (mode != 'lock' && !expected && task instanceof JavaCompile && task.options.fork && task.options.forkOptions.executable) {
+        def requestedHome = new File(task.options.forkOptions.executable).absoluteFile.parentFile.parentFile
+        if (requestedHome.absolutePath != new File(System.getProperty('java.home')).canonicalPath) {
+            throw new GradleException("gradle-purifier: ${task.path} selects a non-manager SDK absent from this lock; run 'gradle-purifier lock --relock -- ${task.path}'")
+        }
+    }
+    def provider = task.property(providerName)
+    if (!provider.present) throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
+    def tool = provider.get()
+    def providerHome = tool.metadata.installationPath.asFile
+    def executable = tool.executablePath.asFile
+    if (task instanceof JavaCompile && task.options.fork) {
+        if (task.options.forkOptions.executable) executable = new File(task.options.forkOptions.executable)
+        else if (task.options.forkOptions.javaHome) executable = new File(task.options.forkOptions.javaHome, 'bin/javac')
+    } else if ((task instanceof Test || task instanceof JavaExec || task instanceof Javadoc) && task.executable) {
+        executable = new File(task.executable)
+    }
+    def home = executable.absoluteFile.parentFile.parentFile
+    // Retain lexical paths too: canonicalizing an ambient alias must not bless it.
+    [task: task.path, role: role, home: home.absolutePath, canonicalHome: home.canonicalPath,
+        executable: executable.absolutePath, canonicalExecutable: executable.canonicalPath,
+        providerHome: providerHome.absolutePath, providerMajor: tool.metadata.languageVersion.toString()]
+}
+def select = { task ->
+    try { inspectSelection(task) }
+    catch (Exception error) {
+        throw new GradleException("gradle-purifier: cannot resolve SDK role for ${task.path}; run 'gradle-purifier lock --relock -- ${task.path}'", error)
+    }
+}
+def check = { row ->
+    if (!expected || expected.legacy) {
+        def allowed = [new File(System.getProperty('java.home')).canonicalPath] + (expected?.explicitHomes ?: [])
+        if (row.home != row.canonicalHome || !allowed.contains(row.home) || row.executable != row.canonicalExecutable) {
+            throw new GradleException("gradle-purifier: ${row.task} selects a non-manager SDK absent from this lock; run 'gradle-purifier lock --relock -- ${row.task}'")
+        }
+        return
+    }
+    def recorded = expected.roles.find { it.task == row.task && it.role == row.role }
+    if (!recorded) throw new GradleException("gradle-purifier: SDK role ${row.task}/${row.role} was not selected by the lock; run 'gradle-purifier lock --relock -- ${row.task}'")
+    if (row.home != row.canonicalHome || row.home != recorded.home || row.executable != row.canonicalExecutable) {
+        throw new GradleException("gradle-purifier: ${row.task} selected an SDK that differs from its immutable lock; select the recorded Nix SDK and run 'gradle-purifier lock --relock -- ${row.task}'")
+    }
+    if (System.getenv('GRADLE_PURIFIER_SDK_TRACE') == '1') {
+        println "GRADLE-SDK-VALIDATED ${row.task}/${row.role} ${row.home}"
+    }
+}
+gradle.taskGraph.whenReady { graph ->
+    graph.allTasks.each { task ->
+        def row = select(task)
+        if (row) {
+            if (!isRootSdkBuild()) {
+                def managerHome = expected?.managerHome ?: new File(System.getProperty('java.home')).canonicalPath
+                def allowed = [managerHome] + ((expected?.legacy) ? expected.explicitHomes : [])
+                if (row.home != row.canonicalHome || !allowed.contains(row.home)) throw new GradleException('gradle-purifier: non-manager SDK tasks in nested builds require explicit supported SDK input handling; automatic capture currently covers root-build roles')
+                return
+            }
+            if (mode == 'lock') rows << row
+            else check(row)
+        }
+    }
+    if (mode == 'lock' && isRootSdkBuild()) {
+        def directory = new File(captureOutput)
+        directory.mkdirs()
+        new File(directory, 'task-sdks.json').text = JsonOutput.toJson([managerHome: new File(System.getProperty('java.home')).canonicalPath, tasks: rows.sort { a,b -> a.task <=> b.task ?: a.role <=> b.role }])
+    }
+}
+gradle.taskGraph.beforeTask { task ->
+    if (mode != 'lock' && roleOf(task) && isRootSdkBuild()) check(select(task))
+}
+gradle.taskGraph.afterTask { task, state ->
+    if (roleOf(task) && isRootSdkBuild()) {
+        def completed = select(task)
+        if (mode != 'lock') check(completed)
+        else {
+            def selected = rows.find { it.task == task.path && it.role == completed.role }
+            if (!selected || selected.home != completed.home || selected.executable != completed.executable) {
+                throw new GradleException("gradle-purifier: ${task.path} changed its SDK during execution; configure a stable canonical Nix SDK and run 'gradle-purifier lock --relock -- ${task.path}'")
+            }
+            synchronized (observations) {
+                observations[task.path] = [executed: state.executed, skipped: state.skipped,
+                    upToDate: state.upToDate, noSource: state.noSource, failed: state.failure != null]
+                new File(captureOutput, 'task-sdk-observations.json').text = JsonOutput.toJson(observations)
+            }
+        }
+    }
+}

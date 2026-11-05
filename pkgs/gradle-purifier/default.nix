@@ -7,6 +7,9 @@
   # The nixpkgs source of the package set, which `gradle-purifier publish`
   # builds the packages with.
   path,
+  sdkSource ? null,
+  sdkSourcePath ? null,
+  writeText,
   # The source of the nix-purifiers library, at the revision this flake
   # pins; the default package overlay passes it.
   purifierSource ? throw "gradle-purifier: the command needs purifierSource, the source of the nix-purifiers library",
@@ -44,6 +47,18 @@ let
   };
 
   nixLib = ../../nix/lib;
+  sdkDescriptor = writeText "gradle-sdk-source.json" (
+    builtins.toJSON (
+      if sdkSource != null && sdkSourcePath != null && toString path == toString sdkSourcePath then
+        {
+          source = sdkSource;
+          nixpkgs = toString path;
+          system = stdenv.hostPlatform.system;
+        }
+      else
+        null
+    )
+  );
 in
 writeShellApplication {
   name = "gradle-purifier";
@@ -63,6 +78,7 @@ writeShellApplication {
         "@recorder@"
         "@java@"
         "@lockVersion@"
+        "@sdkDescriptor@"
         "@nixpkgs@"
         "@purifier@"
         "@dynamicLinker@"
@@ -72,6 +88,7 @@ writeShellApplication {
         "${recorder}"
         "${jdk.home or "${jdk}/lib/openjdk"}"
         (toString (import ../../nix/lib/lock-version.nix))
+        "${sdkDescriptor}"
         "${path}"
         "${purifierSource}"
         stdenv.cc.bintools.dynamicLinker

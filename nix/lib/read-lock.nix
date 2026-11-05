@@ -61,6 +61,47 @@ let
       || (isString (a.path or null) && isString (a.contents or null))
     );
 
+  isSdkSource =
+    source:
+    isAttrs source
+    && source.type or null == "github"
+    && source.owner or null == "NixOS"
+    && source.repo or null == "nixpkgs"
+    && isString (source.rev or null)
+    && match "[0-9a-f]{40}" source.rev != null
+    && isString (source.narHash or null);
+  isSdk =
+    sdk:
+    isAttrs sdk
+    && isSdkSource (sdk.source or null)
+    && isList (sdk.attribute or null)
+    && sdk.attribute != [ ]
+    && lib.all isString sdk.attribute
+    && isString (sdk.output or null)
+    && isString (sdk.home or null)
+    && isString (sdk.identityHash or null);
+  isSdkRole =
+    role:
+    isAttrs role
+    && isString (role.task or null)
+    && builtins.elem (role.role or null) [
+      "compiler"
+      "launcher"
+      "javadoc"
+    ]
+    && isString (role.sdk or null)
+    && role.provenance or null == "resolved-selected-provider";
+  isSdkContext =
+    context:
+    isAttrs context
+    && isList (context.sdks or null)
+    && lib.all isSdk context.sdks
+    && isList (context.roles or null)
+    && lib.all isSdkRole context.roles;
+  validProjectJdks =
+    !(raw ? projectJdks)
+    || (isAttrs raw.projectJdks && lib.all isSdkContext (builtins.attrValues raw.projectJdks));
+
   # The first problem of the lockfile's structure, or null.
   structureProblem =
     if !isAttrs raw then
@@ -84,6 +125,8 @@ let
       "lacks a field of a gradle-purifier lockfile"
     else if !(lib.all isArtifact raw.artifacts) then
       "has an artifact that is neither { url, hash } nor { path, contents }"
+    else if !validProjectJdks then
+      "has malformed project SDK contexts"
     else if contentHashOf raw != raw.contentHash then
       "does not match its contentHash, so it was edited"
     else
@@ -211,6 +254,7 @@ in
       rootProjectName
       ;
     inherit gradleVersion;
+    projectJdks = raw.projectJdks or null;
     konanEntries = filter (e: e ? url && lib.hasPrefix konanPrefix e.url) entries;
   };
 }

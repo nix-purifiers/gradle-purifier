@@ -222,6 +222,32 @@ The builder takes these arguments besides `src`, the root of the build:
 - `doCheck` runs the `check` task of each project in its package build.
 - `srcFilter` filters the build root before it is copied into the store.
 
+Native capture also records additional project SDKs selected by root-build
+`JavaCompile`, `Test`, `JavaExec` and `Javadoc` task providers and effective
+executable overrides. Automatic capture currently recognizes canonical headless compiler outputs
+from the command's pinned nixpkgs. A Java major or vendor name alone is not SDK identity. The
+optional, platform-scoped `projectJdks` field binds the immutable source,
+package attribute and Nix output identity; the builder reconstructs those
+packages and includes their closures automatically. Prefetch and CLI publication
+use the same resolved SDK list. `--java` still selects the Gradle manager JDK;
+it does not replace the project's compiler or launcher selection.
+
+Selected roles are not claims that task actions executed. Runtime outcomes
+remain separate diagnostics. A newly requested SDK role absent from a split-SDK
+lock requires `gradle-purifier lock --relock -- <task>`. Additional ambient SDK homes,
+mutable aliases and unknown custom SDK outputs are rejected with relock advice;
+typed custom SDK inputs in CLI capture remain outside this first implementation. Automatic
+additional-SDK capture covers root-build roles; a nested build requesting a
+non-manager SDK fails explicitly. It does not claim complete custom-task coverage.
+
+Existing manager-only lockfiles retain their format and byte identity. Their
+missing SDK field does not authorize a foreign SDK: replay detects that use and
+requests a relock. Additional explicit `toolchainJdks` remain available in the
+builder API as validated Nix inputs; absent metadata never discovers or imports
+an ambient JDK. The bounded regression uses Gradle 8.14.3 with a Java 21 manager
+and Java 8 project tools, plus its same-SDK control; it establishes no historical
+Gradle API or SDK support range.
+
 `lib.gradle-purifier.readLock { src, lockFile }` reads the lock into the
 shape that every purifier shares: `entries`, `outputs` and `problems`.
 
