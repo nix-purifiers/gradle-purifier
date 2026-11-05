@@ -251,6 +251,13 @@ purifier from that package set or pass a compatible toolchain to the builder.
 
 ## Working offline
 
+The locked repository keeps regular files at their native artifact names.
+Gradle's Groovy compiler discovery resolves symlinks before inspecting jar
+names, so symlinks directly to individual Nix store objects are insufficient.
+Sandboxed Maven publications normalize timestamped SNAPSHOT filenames from
+their emitted metadata before removing timestamp metadata. POM, module and
+classifier artifacts remain required where the lock declares them.
+
 After `prefetch`, `./gradlew`, a Gradle on the `PATH` and an IDE build
 with the network cut off. Gradle reads the locked files from the Nix
 store, so its own download cache stays empty.

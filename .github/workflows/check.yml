@@ -119,3 +119,7 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - name: Native Nix project inputs
         run: python3 tests/composition-native.py
+      - name: Capture and replay SNAPSHOT publication with Groovy inference
+        run: |
+          nix build '.#default' --out-link "$RUNNER_TEMP/snapshot-groovy-cli"
+          python3 tests/snapshot-groovy-native.py "$RUNNER_TEMP/snapshot-groovy-cli/bin/gradle-purifier"
