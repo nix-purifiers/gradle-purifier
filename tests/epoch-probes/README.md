@@ -81,7 +81,7 @@ catalog compatibility points before the required production paths and landed
 native CI prove them.
 
 The separate CLI-only snapshots in `tests/gradle-flags-help` were collected from
-actual Gradle 2.14.1, 8.14.3 and 9.9.0-rc-1 distributions with their selected
+actual Gradle 2.14.1, 8.14.3, 9.5.1 and 9.9.0-rc-1 distributions with their selected
 SDKs. Collection checked native option parsing and used an init-script trap to
 confirm that `--help` did not initialize projects or execute tasks. The unit check
 replays these snapshots offline; it is not a new native compatibility matrix.
@@ -90,7 +90,9 @@ replays these snapshots offline; it is not a new native compatibility matrix.
 flat-only parser and is deliberately byte-identical to the ordinary 9.9 RC
 snapshot. The explicit categorized signature now accepts that input only with its
 complete section sequence and footer. Missing categories or footer, duplicate
-usage output and unknown sections still fail closed.
+usage output and unknown sections still fail closed. The existing Petclinic
+9.5.1 fixture uses a separately observed categorized layout with console options
+under Logging; its complete section sequence and footer are also required.
 
 Inventory sources: [Gradle versions](https://services.gradle.org/versions/all),
 [Gradle compatibility reference](https://docs.gradle.org/current/userguide/compatibility.html),

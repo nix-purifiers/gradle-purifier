@@ -34,7 +34,7 @@ class GradleFlagsTest(unittest.TestCase):
         modern = (FIXTURES / 'gradle-8.14.3.txt').read_text()
         self.assertEqual(flags.select('sandbox', modern), ['--no-daemon', '--no-configuration-cache',
             '--no-build-cache', '--no-watch-fs', '--console=plain'])
-        self.assertEqual(flags.select('publish', modern), ['--no-daemon', '--no-configuration-cache', '--no-build-cache'])
+        self.assertEqual(flags.select('publish', modern), ['--no-configuration-cache'])
 
     def test_categorized_help_keeps_strict_completeness(self):
         text = (FIXTURES / 'gradle-9.9.0-rc-1-rejected-v3.txt').read_text()
@@ -44,6 +44,20 @@ class GradleFlagsTest(unittest.TestCase):
                        text[:text.index('  --no-scan')], text + text]:
             with self.assertRaises(ValueError):
                 flags.select('capture', broken)
+
+    def test_existing_petclinic_native_help(self):
+        text = (FIXTURES / 'gradle-9.5.1.txt').read_text()
+        self.assertEqual(flags.select('sandbox', text), ['--no-daemon', '--no-configuration-cache',
+            '--no-build-cache', '--no-watch-fs', '--console=plain'])
+        for broken in [text[:text.index('Develocity:')], text.replace('Logging:', 'Unknown section:'),
+                       text[:text.index('  --no-scan')], text + text]:
+            with self.assertRaises(ValueError):
+                flags.select('sandbox', broken)
+
+    def test_publication_preserves_daemon_and_cache_policy(self):
+        for profile in ['gradle-2.14.1', 'gradle-8.14.3', 'gradle-9.5.1', 'gradle-9.9.0-rc-1']:
+            selected = flags.select('publish', (FIXTURES / (profile + '.txt')).read_text())
+            self.assertEqual(selected, [] if profile == 'gradle-2.14.1' else ['--no-configuration-cache'])
 
     def test_failed_or_incomplete_help_never_selects_partial_controls(self):
         text = (FIXTURES / 'gradle-8.14.3.txt').read_text()
