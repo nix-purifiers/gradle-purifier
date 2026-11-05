@@ -27,14 +27,19 @@ assert failure.returncode!=0 and ':test has no selected SDK' in (full/'run.log')
 rows.append(dict(case='unchanged-full-fixture-unknown-test',exitCode=failure.returncode,rejected=True))
 (out/'report.json').write_text(json.dumps(rows,indent=2)+'\n')
 print('unchanged full fixture barrier PASS',flush=True)
-for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conflict']:
+for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conflict','compiler-wrong-binary','launcher-wrong-binary']:
  if name=='alias-retargeted':alias.unlink();alias.symlink_to(sdks['java17']['home'])
  case=out/name;case.mkdir();project=case/'project';epoch.fixture(project,profile,sdks);build=project/'build.gradle';text=build.read_text()
  if name.startswith('alias'):text=text.replace(sdks['java8']['home'],str(alias))
  if name=='provider-conflict':text+='\ncompileJava.javaCompiler.set(javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(17) })\n'
+ if name=='compiler-wrong-binary':text+="\ncompileJava.options.forkOptions.executable='"+sdks['java8']['home']+"/bin/java'\n"
+ if name=='launcher-wrong-binary':text+="\nepochTest.executable='"+sdks['java8']['home']+"/bin/javac'\n"
  build.write_text(text);env=dict(os.environ,JAVA_HOME=sdks['java17']['home'],GRADLE_USER_HOME=str(case/'home'),GRADLE_PURIFIER_MODE='lock',GRADLE_PURIFIER_OUTPUT=str(case/'output'));cmd=['bash',str(gradle),'--offline','--no-daemon','--init-script',str(lib/'task-jdks.init.gradle'),':compileJava',':compileTestJava',':epochTest']
  with (case/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=120)
- if name=='provider-conflict':
+ if name in ['compiler-wrong-binary','launcher-wrong-binary']:
+  assert r.returncode!=0 and 'explicit executable does not match its' in (case/'run.log').read_text()
+  result=dict(case=name,rejected=True,reason='explicit executable does not match SDK role')
+ elif name=='provider-conflict':
   assert r.returncode!=0 and 'conflicting provider and explicit SDKs' in (case/'run.log').read_text();result=dict(case=name,rejected=True,reason='conflicting provider and explicit SDKs')
  else:
   assert r.returncode==0,(name,(case/'run.log').read_text()[-3000:]);receipt=json.loads((case/'output/task-sdks.json').read_text());assert len(receipt['tasks'])==3 and all(t['selectionProvenance']=='configured-native-executable' for t in receipt['tasks'])
@@ -55,6 +60,8 @@ def rejected_receipt(name,value,needle):
  except ValueError as error:
   assert needle in str(error),(name,error);rows.append(dict(case=name,rejected=True,reason=str(error)))
  else:raise AssertionError(name+' accepted')
+changed=copy.deepcopy(receipt);changed['tasks'][0]['executable']=str(Path(changed['tasks'][0]['home'])/'bin/java')
+rejected_receipt('capture-compiler-wrong-binary',changed,'explicit SDK executable does not match compiler role')
 changed=copy.deepcopy(receipt);changed['tasks'][0]['selectionProvenance']='invented-selection'
 rejected_receipt('unknown-provenance',changed,'unsupported SDK selection provenance')
 changed=copy.deepcopy(receipt);changed['tasks'][0]['role']='javadoc'

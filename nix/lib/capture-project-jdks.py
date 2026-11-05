@@ -15,6 +15,10 @@ def capture(receipt, descriptor, expression):
             raise ValueError('unsupported SDK selection provenance for ' + row['task'])
         if provenance == 'configured-native-executable' and row['role'] not in {'compiler', 'launcher'}:
             raise ValueError('explicit executable SDK provenance is unsupported for ' + row['role'])
+        if provenance == 'configured-native-executable':
+            binary = 'javac' if row['role'] == 'compiler' else 'java'
+            if row['executable'] != str(Path(row['home']) / 'bin' / binary):
+                raise ValueError('explicit SDK executable does not match ' + row['role'] + ' role')
     if not receipt['tasks'] or all(row['home']==receipt['managerHome'] and row['home']==row['canonicalHome'] for row in receipt['tasks']):
         return {}  # Preserve the existing manager-only lock contract and byte identity.
     if not descriptor:
