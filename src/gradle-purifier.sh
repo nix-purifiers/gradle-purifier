@@ -482,6 +482,12 @@ run_lock() {
   base=http://127.0.0.1:${ports[0]}
   tunnel_port=${ports[1]}
 
+  local gradle_flags=()
+  GRADLE_PURIFIER_MODE='' JAVA_HOME=$java GRADLE_USER_HOME=$work/gradle-home \
+    python3 "$lib/gradle-flags.py" capture "$work/gradle-help.txt" --gradle "$gradle_home/bin/gradle" --arguments-json "$args_json" >"$work/gradle-flags.txt" \
+    || die "could not select native Gradle controls"
+  mapfile -t gradle_flags <"$work/gradle-flags.txt"
+
   echo "gradle-purifier: running the lock build in $work/build" >&2
   if ! (
     cd "$work/build" || exit 1
@@ -502,7 +508,6 @@ run_lock() {
       "$gradle_home/bin/gradle" \
       --init-script "$lib/purifier.init.gradle" \
       --init-script "$lib/task-jdks.init.gradle" \
-      --no-daemon --no-configuration-cache --no-build-cache --console=plain \
       "-Dorg.gradle.internal.plugins.portal.url.override=$base/$portal" \
       "-Djava.io.tmpdir=${TMPDIR:-/tmp}" \
       -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 \
@@ -510,7 +515,7 @@ run_lock() {
       '-Dhttp.nonProxyHosts=localhost|127.0.0.1' \
       -Porg.gradle.java.installations.auto-download=false \
       -Pkotlin.compiler.execution.strategy=in-process \
-      "${gradle_args[@]}" "${update_args[@]}" \
+      "${gradle_args[@]}" "${update_args[@]}" "${gradle_flags[@]}" \
       purifierLock </dev/null 2>&1 | tee "$work/gradle.log"
   ); then
     # The lock serves the version listings of the lockfile, so a dynamic
@@ -736,6 +741,12 @@ publish_command() {
   mapfile -t excluded < <(jq -r '.projects[] | (if .path == ":" then "" else .path end) as $p
     | .publications[] | "-x", "\($p):generateMetadataFileFor\(.name[0:1] | ascii_upcase)\(.name[1:])Publication"' "$lockfile")
   mapfile -t locked_args < <(jq -r '.gradleArguments[]' "$lockfile")
+  local gradle_flags=() publish_args_json
+  publish_args_json=$(jq -n -c '$ARGS.positional' --args -- "${locked_args[@]}" "$@")
+  GRADLE_PURIFIER_MODE='' JAVA_HOME=$(jdk_home "$jdk") \
+    python3 "$lib/gradle-flags.py" publish "$state/publish-gradle-help.txt" --gradle "$distribution/bin/gradle" --arguments-json "$publish_args_json" >"$state/publish-gradle-flags.txt" \
+    || die "could not select native Gradle controls"
+  mapfile -t gradle_flags <"$state/publish-gradle-flags.txt"
   JAVA_HOME=$(jdk_home "$jdk") \
     GRADLE_PURIFIER_MODE=publish \
     GRADLE_PURIFIER_BUILD_ROOT=$root \
@@ -744,11 +755,10 @@ publish_command() {
     GRADLE_PURIFIER_PUBLICATION_REPOSITORY=$publication/repository \
     GRADLE_PURIFIER_PUBLICATION_CATALOG=$publication/catalog.json \
     exec "$distribution/bin/gradle" \
-    --offline --no-configuration-cache \
     --init-script "$lib/purifier.init.gradle" \
     --init-script "$lib/task-jdks.init.gradle" \
     "-Dorg.gradle.internal.plugins.portal.url.override=file://$tree/$portal" \
-    "${locked_args[@]}" "${excluded[@]}" "$@"
+    "${locked_args[@]}" "${excluded[@]}" "$@" --offline "${gradle_flags[@]}"
 }
 
 # The unit tests (tests/cli-unit.sh) source the command for its functions.

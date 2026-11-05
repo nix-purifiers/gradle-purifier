@@ -303,10 +303,12 @@ let
     export JAVA_HOME=${javaHome jdk'}
     mkdir -p "$HOME" "$GRADLE_USER_HOME"
     ${lib.optionalString hasKonan konanSetup}
+    GRADLE_PURIFIER_MODE="" ${python3}/bin/python ${./gradle-flags.py} sandbox "$TMPDIR/gradle-help.txt" \
+      --gradle ${distribution}/bin/gradle \
+      --arguments-json ${lib.escapeShellArg (builtins.toJSON gradle.gradleArguments)} > "$TMPDIR/gradle-flags.txt"
+    mapfile -t gradleFlags < "$TMPDIR/gradle-flags.txt"
     status=0
     ${distribution}/bin/gradle \
-      --offline --no-daemon --no-configuration-cache --no-build-cache --no-watch-fs \
-      --console=plain --stacktrace \
       --init-script ${initScript} \
       --init-script ${./task-jdks.init.gradle} \
       -Dorg.gradle.internal.plugins.portal.url.override=file://${repository}/${portal} \
@@ -319,7 +321,7 @@ let
       } \
       -Pkotlin.compiler.execution.strategy=in-process \
       ${lib.escapeShellArgs gradle.gradleArguments} \
-      ${lib.escapeShellArgs tasks} </dev/null 2> >(tee "$TMPDIR/gradle-errors" >&2) || status=$?
+      ${lib.escapeShellArgs tasks} --offline "''${gradleFlags[@]}" --stacktrace </dev/null 2> >(tee "$TMPDIR/gradle-errors" >&2) || status=$?
     wait
     if [ "$status" -ne 0 ]; then
       if grep -q -e 'Could not find' -e 'Could not resolve' "$TMPDIR/gradle-errors" \
