@@ -80,6 +80,18 @@ review. Do not turn native-only controls or these observed failures into
 catalog compatibility points before the required production paths and landed
 native CI prove them.
 
+The separate CLI-only snapshots in `tests/gradle-flags-help` were collected from
+actual Gradle 2.14.1, 8.14.3 and 9.9.0-rc-1 distributions with their selected
+SDKs. Collection checked native option parsing and used an init-script trap to
+confirm that `--help` did not initialize projects or execute tasks. The unit check
+replays these snapshots offline; it is not a new native compatibility matrix.
+
+`gradle-9.9.0-rc-1-rejected-v3.txt` retains the exact input rejected by the former
+flat-only parser and is deliberately byte-identical to the ordinary 9.9 RC
+snapshot. The explicit categorized signature now accepts that input only with its
+complete section sequence and footer. Missing categories or footer, duplicate
+usage output and unknown sections still fail closed.
+
 Inventory sources: [Gradle versions](https://services.gradle.org/versions/all),
 [Gradle compatibility reference](https://docs.gradle.org/current/userguide/compatibility.html),
 [Azul Java 6 metadata](https://api.azul.com/metadata/v1/zulu/packages/6dc1d984-dd4c-11ea-a8fe-fa163ed8e833),

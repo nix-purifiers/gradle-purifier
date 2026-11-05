@@ -38,6 +38,7 @@ class GradleFlagsTest(unittest.TestCase):
 
     def test_categorized_help_keeps_strict_completeness(self):
         text = (FIXTURES / 'gradle-9.9.0-rc-1-rejected-v3.txt').read_text()
+        self.assertEqual(text, (FIXTURES / 'gradle-9.9.0-rc-1.txt').read_text())
         self.assertIn('--no-configuration-cache', flags.select('capture', text))
         for broken in [text[:text.index('Develocity:')], text.replace('Develocity:', 'Unknown section:'),
                        text[:text.index('  --no-scan')], text + text]:
