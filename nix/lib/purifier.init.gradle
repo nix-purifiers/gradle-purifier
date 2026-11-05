@@ -48,62 +48,6 @@ import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.tasks.Sync
 
-// After a build that reads the locked downloads, the action
-// PurifierMissingHint names the command that records a download the build
-// needed and the lockfile does not hold. Gradle runs it once the build has
-// finished (the dataflow actions of Gradle 8.1 and later).
-abstract class PurifierMissingHint implements org.gradle.api.flow.FlowAction<Parameters> {
-    interface Parameters extends org.gradle.api.flow.FlowParameters {
-        @org.gradle.api.tasks.Input
-        org.gradle.api.provider.Property<Boolean> getMissing()
-    }
-
-    @Override
-    void execute(Parameters parameters) {
-        if (parameters.missing.get()) {
-            System.err.println("gradle-purifier: the build needs a download that the lockfile does not hold (Gradle names it above); run 'gradle-purifier lock', then 'gradle-purifier prefetch'.")
-        }
-    }
-
-    // Whether a failure, or one of its causes, is a dependency Gradle could
-    // not resolve.
-    static boolean isMissing(Throwable failure) {
-        def seen = [] as Set
-        def pending = [failure]
-        while (!pending.isEmpty()) {
-            def t = pending.remove(0)
-            if (t == null || !seen.add(t)) {
-                continue
-            }
-            def message = t.message ?: ''
-            if (message.contains('Could not find') || message.contains('Could not resolve')) {
-                return true
-            }
-            pending.add(t.cause)
-            if (t.metaClass.respondsTo(t, 'getCauses')) {
-                pending.addAll(t.causes)
-            }
-        }
-        false
-    }
-}
-
-abstract class PurifierMissingHintPlugin implements Plugin<Settings> {
-    @javax.inject.Inject
-    abstract org.gradle.api.flow.FlowScope getFlowScope()
-
-    @javax.inject.Inject
-    abstract org.gradle.api.flow.FlowProviders getFlowProviders()
-
-    void apply(Settings settings) {
-        flowScope.always(PurifierMissingHint) { spec ->
-            spec.parameters.missing.set(flowProviders.buildWorkResult.map { result ->
-                result.failure.map { PurifierMissingHint.isMissing(it) }.orElse(false)
-            })
-        }
-    }
-}
-
 // A setting comes from the environment, or else from the system property
 // of the same name in lower case with dots (gradle.purifier.mode), which
 // the everyday init script (user.init.gradle) sets.
@@ -132,9 +76,20 @@ if (mode == 'sandbox') {
 }
 
 if (mode == 'interactive' && gradle.parent == null) {
-    gradle.beforeSettings { settings ->
-        settings.plugins.apply(PurifierMissingHintPlugin)
+    def hasFlow = true
+    for (name in ['org.gradle.api.flow.FlowAction', 'org.gradle.api.flow.FlowParameters',
+                  'org.gradle.api.flow.FlowProviders', 'org.gradle.api.flow.FlowScope',
+                  'org.gradle.api.provider.Property']) {
+        try {
+            Class.forName(name, false, getClass().classLoader)
+        } catch (ClassNotFoundException absent) {
+            hasFlow = false
+        }
     }
+    // Resolve beside the immutable common init script, including when it
+    // was applied from the interactive user init script.
+    def companion = hasFlow ? 'missing-hint-flow.init.gradle' : 'missing-hint-legacy.init.gradle'
+    apply from: new File(buildscript.sourceFile.parentFile, companion)
 }
 def base = setting('GRADLE_PURIFIER_REPOSITORY')
 if (base == null || base.isEmpty()) {
