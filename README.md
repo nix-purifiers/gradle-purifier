@@ -244,9 +244,17 @@ When a native task has no typed SDK provider, an explicitly configured compiler
 or runtime executable can identify its SDK. The lock records this as
 `configured-native-executable` for compiler/launcher roles and still reconstructs
 the exact pinned Nix SDK output. Mutable aliases, same-version replacement outputs
-and conflicts between a provider and explicit executable fail. An absent provider
-without an explicit executable remains an error, including disabled tasks whose
-runtime selection is unknown. This adapter does not certify a legacy version range.
+and conflicts between a provider and explicit executable fail. For a native Test
+task with neither a typed provider nor an explicit executable, the public fork-options
+copy API reads its effective runtime without setting task defaults. The lock records
+`native-effective-fork-options` for that launcher and reconstructs its exact immutable
+SDK. Unsupported, ambiguous or malformed copies fail. Other unknown selections remain
+errors; disabled tasks are not omitted. Graph, pre-task and post-task selection changes
+prevent a successful lock or output. Late hooks can still change a runtime after a
+pre-task check, so this is not a guarantee against execution before rejection.
+A selected SDK on a skipped task supplies no runtime execution credit.
+The native fork-copy path is evidenced on Gradle 7.6.6; custom fork-copy or execution-spec
+overrides fail explicitly. These observations do not establish a historical version range.
 
 Existing manager-only lockfiles retain their format and byte identity. Their
 missing SDK field does not authorize a foreign SDK: replay detects that use and

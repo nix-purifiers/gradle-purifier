@@ -31,6 +31,80 @@ def roleOf = { task ->
     task instanceof JavaCompile ? 'compiler' : task instanceof Javadoc ? 'javadoc' :
         (task instanceof Test || task instanceof JavaExec) ? 'launcher' : null
 }
+// Read the effective runtime through the same public fork-options copy API
+// native Test execution uses. The target records only the executable; it
+// discards environment/working-directory values and never sets task defaults.
+def validateNativeTestExecutable = { values ->
+    def candidates = values.findAll { it != null }.unique()
+    if (candidates.size() != 1 || values.isEmpty() || values[-1] != candidates[0]) {
+        throw new GradleException('gradle-purifier: native Test effective executable is absent or ambiguous')
+    }
+    def executable = new File(candidates[0])
+    if (!executable.isAbsolute() || executable.name != 'java' || executable.parentFile?.name != 'bin') {
+        throw new GradleException('gradle-purifier: malformed native Test effective executable')
+    }
+    executable
+}
+def nativeForkOptionsTarget = { forkInterface, values ->
+    def operations = 0
+    def handler = { proxy, method, arguments ->
+        if (++operations > 16) throw new GradleException('gradle-purifier: unsupported native Test fork-options copy operations')
+        if (method.declaringClass == Object) {
+            if (method.name == 'toString') return 'PurifierForkOptionsTarget'
+            if (method.name == 'hashCode') return System.identityHashCode(proxy)
+            if (method.name == 'equals') return proxy.is(arguments[0])
+        }
+        if (method.name == 'setExecutable' && arguments?.length == 1) {
+            def value = arguments[0]
+            if (value != null && (!(value instanceof String) || value.isEmpty() || value.length() > 4096)) {
+                throw new GradleException('gradle-purifier: malformed native Test effective executable')
+            }
+            values << value
+            return null
+        }
+        if (method.name in ['setWorkingDir', 'setEnvironment'] && arguments?.length == 1) return null
+        throw new GradleException('gradle-purifier: unsupported native Test fork-options copy operation')
+    } as java.lang.reflect.InvocationHandler
+    java.lang.reflect.Proxy.newProxyInstance(forkInterface.classLoader, [forkInterface] as Class[], handler)
+}
+def nativeTestExecutable = { task ->
+    def forkInterface
+    try { forkInterface = Class.forName('org.gradle.process.ProcessForkOptions', false, task.getClass().classLoader) }
+    catch (ClassNotFoundException absent) { throw new GradleException('gradle-purifier: native Test fork-options API is unavailable', absent) }
+    if (!task.getClass().methods.any { it.name == 'copyTo' && it.parameterTypes.toList() == [forkInterface] }) {
+        throw new GradleException('gradle-purifier: native Test fork-options copy API is unavailable')
+    }
+    // The two native overloads share the effective-runtime calculation.
+    // An override could report a different SDK than execution actually uses.
+    def copyMethods = task.getClass().methods.findAll {
+        it.name == 'copyTo' && it.parameterTypes.length == 1 &&
+        it.parameterTypes[0].name in ['org.gradle.process.ProcessForkOptions', 'org.gradle.process.JavaForkOptions']
+    }
+    if (copyMethods.any { it.declaringClass != Test } ||
+        !copyMethods.any { it.parameterTypes[0].name == 'org.gradle.process.JavaForkOptions' }) {
+        throw new GradleException('gradle-purifier: unsupported native Test fork-options implementation')
+    }
+    def type = task.getClass()
+    while (type != null && type != Test) {
+        if (type.declaredMethods.any { it.name == 'createTestExecutionSpec' }) {
+            throw new GradleException('gradle-purifier: unsupported native Test execution-spec implementation')
+        }
+        type = type.superclass
+    }
+    def before = [task.javaLauncher.present, task.executable]
+    def values = []
+    def target = nativeForkOptionsTarget(forkInterface, values)
+    task.copyTo(target)
+    if ([task.javaLauncher.present, task.executable] != before) {
+        throw new GradleException('gradle-purifier: native Test fork-options copy changed task SDK configuration')
+    }
+    validateNativeTestExecutable(values)
+}
+def sameSelection = { selected, current ->
+    selected != null && current != null &&
+        ['home', 'canonicalHome', 'executable', 'canonicalExecutable'].every { selected[it] == current[it] } &&
+        (selected.selectionProvenance ?: 'resolved-selected-provider') == (current.selectionProvenance ?: 'resolved-selected-provider')
+}
 def inspectSelection = { task ->
     def role = roleOf(task)
     if (!role) return null
@@ -50,10 +124,11 @@ def inspectSelection = { task ->
     }
     def provider = task.property(providerName)
     def tool = provider.present ? provider.get() : null
-    if (tool == null && explicit == null) {
+    def nativeRuntime = tool == null && explicit == null && task instanceof Test
+    if (tool == null && explicit == null && !nativeRuntime) {
         throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
     }
-    def executable = explicit ?: tool.executablePath.asFile
+    def executable = nativeRuntime ? nativeTestExecutable(task) : (explicit ?: tool.executablePath.asFile)
     // Preserve existing provider-based Javadoc selection; no absent-provider
     // Javadoc fallback is introduced by the executable adapter.
     if (task instanceof Javadoc && task.executable) executable = new File(task.executable)
@@ -74,7 +149,7 @@ def inspectSelection = { task ->
         row.providerHome = tool.metadata.installationPath.asFile.absolutePath
         row.providerMajor = tool.metadata.languageVersion.toString()
     } else {
-        row.selectionProvenance = 'configured-native-executable'
+        row.selectionProvenance = nativeRuntime ? 'native-effective-fork-options' : 'configured-native-executable'
     }
     row
 }
@@ -127,7 +202,13 @@ gradle.taskGraph.whenReady { graph ->
     }
 }
 gradle.taskGraph.beforeTask { task ->
-    if (mode != 'lock' && roleOf(task) && isRootSdkBuild()) check(select(task))
+    if (roleOf(task) && isRootSdkBuild()) {
+        def current = select(task)
+        if (mode != 'lock') check(current)
+        else if (!sameSelection(rows.find { it.task == task.path && it.role == current.role }, current)) {
+            throw new GradleException("gradle-purifier: ${task.path} changed its SDK after graph selection; configure a stable canonical Nix SDK and relock")
+        }
+    }
 }
 gradle.taskGraph.afterTask { task, state ->
     if (roleOf(task) && isRootSdkBuild()) {
@@ -135,7 +216,7 @@ gradle.taskGraph.afterTask { task, state ->
         if (mode != 'lock') check(completed)
         else {
             def selected = rows.find { it.task == task.path && it.role == completed.role }
-            if (!selected || selected.home != completed.home || selected.executable != completed.executable) {
+            if (!sameSelection(selected, completed)) {
                 throw new GradleException("gradle-purifier: ${task.path} changed its SDK during execution; configure a stable canonical Nix SDK and run 'gradle-purifier lock --relock -- ${task.path}'")
             }
             synchronized (observations) {
