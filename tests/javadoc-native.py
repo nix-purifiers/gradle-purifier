@@ -23,7 +23,7 @@ def main():
     work = args.results.resolve()
     work.mkdir(parents=True, exist_ok=False)
     source = work / 'project'
-    shutil.copytree(root / 'tests/fixtures/javadoc-links', source,
+    shutil.copytree(root / 'tests/javadoc-links', source,
                     ignore=shutil.ignore_patterns('build', '.gradle', '.gradle-purifier', '*lock.json'))
     home = work / 'home'
     home.mkdir()
@@ -51,13 +51,13 @@ def main():
     wrapper.write_text(f'distributionUrl=https\\://services.gradle.org/distributions/gradle-{args.gradle_version}-bin.zip\n')
     gradle_args = [f'-PdocsUrl={link}']
 
-    def run(stage, command, environment=env, success=True, contains=None):
+    def run(stage, command, environment=env, success=True, contains=None, directory=None):
         log = work / (stage + '.log')
-        result = subprocess.run(list(map(str, command)), cwd=source, env=environment, text=True,
+        result = subprocess.run(list(map(str, command)), cwd=directory or source, env=environment, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=300)
         log.write_text(result.stdout)
         outcomes.append({'stage': stage, 'command': list(map(str, command)),
-                         'exitCode': result.returncode, 'log': str(log)})
+                         'exitCode': result.returncode, 'log': str(log), 'cwd': str(directory or source)})
         (work / 'commands.json').write_text(json.dumps(outcomes, indent=2) + '\n')
         if (result.returncode == 0) != success or (contains and contains not in result.stdout):
             raise AssertionError(f'{stage}: unexpected result; see {log}')
@@ -94,6 +94,21 @@ def main():
         requests = len(state['requests'])
         run('relock-server-stopped', [cli, 'lock', '--relock', '--', *gradle_args])
         assert lock_path.read_bytes() == before and len(state['requests']) == requests
+        cold_source = work / 'cold-project'
+        shutil.copytree(root / 'tests/javadoc-links', cold_source)
+        shutil.copyfile(wrapper, cold_source / 'gradle/wrapper/gradle-wrapper.properties')
+        cold_lock = cold_source / 'gradle-purifier.lock.json'
+        cold_lock.write_bytes(before)
+        cold_home = work / 'cold-home'
+        cold_home.mkdir()
+        cold_gradle_home = work / 'cold-gradle-home'
+        cold_env = dict(env, HOME=str(cold_home), XDG_CACHE_HOME=str(cold_home / 'cache'),
+                        GRADLE_USER_HOME=str(cold_gradle_home))
+        assert not cold_gradle_home.exists()
+        assert not any((cold_source / name).exists() for name in ['.gradle', '.gradle-purifier', 'build'])
+        run('cold-relocated-relock-server-stopped', [cli, 'lock', '--relock', '--', *gradle_args],
+            cold_env, directory=cold_source)
+        assert cold_lock.read_bytes() == before and len(state['requests']) == requests
         project_expr = ('let f=builtins.getFlake ' + json.dumps(str(root)) +
                         '; p=import f.inputs.nixpkgs {system=builtins.currentSystem;overlays=[f.overlays.default];}; '
                         'in p.gradle-purifier.buildGradleProject {src=' + str(source) + ';}')
@@ -181,7 +196,8 @@ def main():
         run('offline-after-update', [gradle, '--no-daemon', '--offline', '--rerun-tasks', *gradle_args, 'javadoc'])
         assert (source / 'build/purifier-javadoc/javadoc/0/package-list').read_bytes() == state['contents']
         (work / 'report.json').write_text(json.dumps({'passed': True, 'requests': state['requests'],
-            'htmlByteIdentical': True, 'resources': lock['resources'], 'updatedResources': updated['resources'],
+            'htmlByteIdentical': True, 'coldRelocatedRelockByteIdentical': True,
+            'coldProjectStateFresh': True, 'coldMetadataServerRequestsUnchanged': True, 'resources': lock['resources'], 'updatedResources': updated['resources'],
             'commands': outcomes}, indent=2) + '\n')
     finally:
         server.shutdown()
