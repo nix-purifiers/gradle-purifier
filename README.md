@@ -365,6 +365,17 @@ queries, fragments or traversal segments. IPv6 hosts are rejected before capture
 or replay because the repository mapper does not support their authority syntax.
 Custom doclets and other remote Javadoc inputs are outside this capture path.
 
+For capture, sandboxed builds and publication, Gradle controls come from the
+selected distribution's native `--help` under its selected JDK. The selector recognizes the observed flat and categorized
+help layouts. Failed, unknown, ambiguous or incomplete help probes stop explicitly
+before the build. Daemon/cache enable arguments are rejected, and required disable
+flags follow user arguments. Prefetch materializes the locked toolchain and
+installs its init script; it does not run this probe or replace the native launcher.
+
+This adapts CLI controls only. The measured Gradle 2.14.1 control still fails on
+unavailable init-script APIs; older publication APIs remain separate compatibility
+work. Successful help inspection does not establish a historical support range.
+
 The lock refuses these:
 
 - **Other downloads outside the repositories.** Gradle's own HTTP client gets a
