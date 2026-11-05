@@ -146,6 +146,209 @@ def konanDataDir = setting('GRADLE_PURIFIER_KONAN_DATA_DIR')
 def runCheck = System.getenv('GRADLE_PURIFIER_CHECK') == '1'
 def rootBuild = gradle.parent == null
 
+// Documentation links are native Javadoc inputs, not Maven dependencies.
+// Preserve the public link URL while replaying only its locked link metadata.
+class PurifierJavadocMetadata {
+    static URI remote(String value) {
+        URI uri
+        try { uri = URI.create(value) }
+        catch (IllegalArgumentException error) {
+            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL', error)
+        }
+        def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
+        if (!(uri.scheme?.toLowerCase(Locale.ROOT) in ['http', 'https']) || !uri.host || uri.userInfo != null ||
+            uri.rawQuery != null || uri.rawFragment != null || uri.normalize() != uri ||
+            uri.port > 65535 || uri.rawAuthority != authority || uri.rawAuthority.contains('%') ||
+            uri.path.contains('//') ||
+            uri.path.contains('\\') || uri.path.tokenize('/').any { it in ['.', '..'] } ||
+            value.any { Character.isISOControl((char) it) } ||
+            uri.path.any { Character.isISOControl((char) it) }) {
+            throw new GradleException('gradle-purifier: unsupported Javadoc link URL; use a credential-free HTTP(S) directory URL')
+        }
+        uri
+    }
+
+    static void validateRecords(List records) {
+        def keys = new HashSet()
+        def fields = ['kind', 'build', 'task', 'linkUrl', 'artifactUrl', 'hash'] as Set
+        records.each { record ->
+            if (!(record instanceof Map) || record.keySet() != fields ||
+                !fields.every { record[it] instanceof String } || record.kind != 'javadoc-link-metadata' ||
+                !(record.hash ==~ /sha256-[A-Za-z0-9+\/]{43}=/)) {
+                throw new GradleException('gradle-purifier: invalid external resource role')
+            }
+            def build = record.build
+            if (!(build == '.' || (!build.isEmpty() && !build.startsWith('/') && !build.contains('\\') &&
+                build.split('/', -1).every { !(it in ['', '.', '..']) })) ||
+                build.any { Character.isISOControl((char) it) } ||
+                !record.task.startsWith(':') || record.task == ':' || record.task.endsWith(':') ||
+                record.task.contains('::') || record.task.contains('/') || record.task.contains('\\') ||
+                record.task.any { Character.isISOControl((char) it) }) {
+                throw new GradleException('gradle-purifier: invalid external resource role context')
+            }
+            remote(record.linkUrl)
+            remote(record.artifactUrl)
+            def prefix = record.linkUrl.endsWith('/') ? record.linkUrl : record.linkUrl + '/'
+            if (!(record.artifactUrl in [prefix + 'element-list', prefix + 'package-list'])) {
+                throw new GradleException('gradle-purifier: Javadoc role does not name native link metadata')
+            }
+            def key = JsonOutput.toJson([record.build, record.task, record.linkUrl])
+            if (!keys.add(key)) throw new GradleException('gradle-purifier: ambiguous Javadoc metadata roles')
+        }
+    }
+
+    static String digest(byte[] bytes) {
+        'sha256-' + java.util.Base64.encoder.encodeToString(
+            java.security.MessageDigest.getInstance('SHA-256').digest(bytes))
+    }
+
+    static URI mapped(String base, URI uri) {
+        def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
+        URI.create("${base}/${uri.scheme.toLowerCase(Locale.ROOT)}/${authority}${uri.rawPath}")
+    }
+
+    static Map read(String mode, String base, String build, String task, String link,
+                    List records, boolean refresh) {
+        remote(link)
+        def previous = records.findAll {
+            it.kind == 'javadoc-link-metadata' && it.build == build && it.task == task && it.linkUrl == link
+        }
+        if (previous.size() > 1) throw new GradleException('gradle-purifier: ambiguous Javadoc metadata roles')
+        def record = previous ? previous[0] : null
+        if (mode != 'lock' && record == null) {
+            throw new GradleException("gradle-purifier: Javadoc link metadata is not locked for ${task}; run 'gradle-purifier lock --relock'")
+        }
+        def nativeCandidates = ['element-list', 'package-list'].collect { (link.endsWith('/') ? link : link + '/') + it }
+        def candidates = record != null && !refresh ? [record.artifactUrl] : nativeCandidates
+        for (String candidate : candidates) {
+            def original = remote(candidate)
+            def filename = original.path.tokenize('/').last()
+            if (!(filename in ['element-list', 'package-list']) || !(candidate in nativeCandidates)) {
+                throw new GradleException('gradle-purifier: Javadoc role does not name native link metadata')
+            }
+            def location = mapped(base, original)
+            byte[] bytes
+            if (mode == 'lock') {
+                def connection = location.toURL().openConnection()
+                connection.setRequestProperty('X-Gradle-Purifier-Resource', 'javadoc-link-metadata')
+                connection.connectTimeout = 30000
+                connection.readTimeout = 30000
+                try {
+                    int status = connection.responseCode
+                    if (status == 404 && (record == null || refresh)) continue
+                    if (status != 200) throw new GradleException("gradle-purifier: Javadoc metadata fetch failed (${status})")
+                    bytes = connection.inputStream.withCloseable { it.bytes }
+                } finally {
+                    connection.disconnect()
+                }
+            } else {
+                if (location.scheme != 'file') throw new GradleException('gradle-purifier: Javadoc replay requires a local locked repository')
+                def root = new File(URI.create(base)).canonicalFile.toPath()
+                def file = new File(location).canonicalFile
+                if (!file.toPath().startsWith(root) || !file.isFile()) {
+                    throw new GradleException("gradle-purifier: locked Javadoc metadata is missing for ${task}; run 'gradle-purifier prefetch'")
+                }
+                bytes = file.bytes
+            }
+            // The inline lock representation is UTF-8 text. Reject bytes
+            // that JSON encoding would otherwise replace during capture.
+            java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes))
+            def hash = digest(bytes)
+            if (record != null && !refresh && record.hash != hash) {
+                throw new GradleException("gradle-purifier: Javadoc metadata hash mismatch for ${task}")
+            }
+            return [record: [kind: 'javadoc-link-metadata', build: build, task: task,
+                              linkUrl: link, artifactUrl: candidate, hash: hash],
+                    filename: filename, bytes: bytes]
+        }
+        throw new GradleException("gradle-purifier: no element-list or package-list for Javadoc task ${task}")
+    }
+}
+
+def resourceManifest = setting('GRADLE_PURIFIER_RESOURCES')
+def resourceRecords = []
+if (resourceManifest && new File(resourceManifest).isFile()) {
+    def document = new JsonSlurper().parse(new File(resourceManifest))
+    if (!(document instanceof List) && !(document instanceof Map)) {
+        throw new GradleException('gradle-purifier: invalid external resource manifest')
+    }
+    resourceRecords = document instanceof List ? document : (document.resources ?: [])
+    if (!(resourceRecords instanceof List)) throw new GradleException('gradle-purifier: invalid external resource manifest')
+}
+PurifierJavadocMetadata.validateRecords(resourceRecords)
+def refreshResources = System.getenv('GRADLE_PURIFIER_RESOURCE_REFRESH') == '1'
+if (mode != 'publish') {
+    gradle.projectsEvaluated { g ->
+        def outermost = g
+        while (outermost.parent != null) outermost = outermost.parent
+        g.rootProject.allprojects.each { project ->
+            def context = outermost.rootProject.projectDir.toPath().relativize(project.rootDir.toPath()).toString().replace('\\', '/') ?: '.'
+            project.tasks.withType(org.gradle.api.tasks.javadoc.Javadoc).toList().each { javadoc ->
+                if (!(javadoc.options instanceof org.gradle.external.javadoc.StandardJavadocDocletOptions)) return
+                def remoteLinks = { javadoc.options.links.findAll { URI.create(it).scheme?.toLowerCase(Locale.ROOT) in ['http', 'https'] }.toList() }
+                if (remoteLinks().isEmpty()) return
+                if (javadoc.options.doclet != null) {
+                    throw new GradleException('gradle-purifier: external Javadoc capture supports the standard doclet only')
+                }
+                def destination = project.layout.buildDirectory.dir("purifier-javadoc/${javadoc.name}")
+                def selectedRoles = resourceRecords.findAll { it.build == context && it.task == javadoc.path }
+                def prepare = project.tasks.register("purifier${javadoc.name.capitalize()}LinkMetadata") { task ->
+                    task.inputs.property('linkUrls', project.provider(remoteLinks))
+                    task.inputs.property('metadataMode', mode)
+                    task.inputs.property('metadataRepository', base)
+                    task.inputs.property('metadataRoles', JsonOutput.toJson(selectedRoles))
+                    if (mode != 'lock') {
+                        task.inputs.files(project.provider {
+                            selectedRoles.collect { role ->
+                                new File(PurifierJavadocMetadata.mapped(base,
+                                    PurifierJavadocMetadata.remote(role.artifactUrl)))
+                            }
+                        }).withPropertyName('lockedJavadocMetadata')
+                    }
+                    task.outputs.dir(destination)
+                    task.doLast {
+                        def directory = destination.get().asFile
+                        project.delete(directory)
+                        directory.mkdirs()
+                        def captured = remoteLinks().withIndex().collect { link, index ->
+                            def selected = PurifierJavadocMetadata.read(mode, base, context, javadoc.path,
+                                link, resourceRecords, refreshResources)
+                            def metadata = new File(directory, index.toString())
+                            metadata.mkdirs()
+                            new File(metadata, selected.filename).bytes = selected.bytes
+                            selected.record
+                        }
+                        PurifierJavadocMetadata.validateRecords(captured)
+                        new File(directory, 'roles.json').text = JsonOutput.toJson(captured)
+                        if (mode == 'lock') {
+                            def key = java.security.MessageDigest.getInstance('SHA-256')
+                                .digest((context + ':' + javadoc.path).getBytes('UTF-8')).encodeHex().toString()
+                            def file = new File(output, "external-resources/${key}.json")
+                            file.parentFile.mkdirs()
+                            file.text = JsonOutput.toJson(captured)
+                        }
+                    }
+                }
+                javadoc.dependsOn(prepare)
+                javadoc.inputs.dir(destination).withPropertyName('purifierJavadocLinkMetadata')
+                javadoc.doFirst {
+                    def directory = destination.get().asFile
+                    def captured = new JsonSlurper().parse(new File(directory, 'roles.json'))
+                    if (captured.collect { it.linkUrl } != remoteLinks()) {
+                        throw new GradleException('gradle-purifier: Javadoc links changed after their metadata was prepared')
+                    }
+                    javadoc.options.links = javadoc.options.links.findAll { !(it in captured.collect { r -> r.linkUrl }) }
+                    captured.eachWithIndex { record, index ->
+                        javadoc.options.linksOffline(record.linkUrl, new File(directory, index.toString()).absolutePath)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // The Nix input catalog is outside the native repository and is not a
 // downloaded dependency. It supplies the selected versions automatically.
 def providedCatalog = setting('GRADLE_PURIFIER_PROVIDED_CATALOG')

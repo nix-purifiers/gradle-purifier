@@ -133,6 +133,121 @@ let
         map sdkContextProblem (builtins.attrValues raw.projectJdks)
       );
 
+  isSha256Sri = value: isString value && match "sha256-[A-Za-z0-9+/]{43}=" value != null;
+  validRelativeBuild =
+    value:
+    isString value
+    && (
+      value == "."
+      || (
+        value != ""
+        && !(lib.hasPrefix "/" value)
+        && !(lib.hasInfix "\\" value)
+        && match ".*[[:cntrl:]].*" value == null
+        && lib.all (
+          segment:
+          !(builtins.elem segment [
+            ""
+            "."
+            ".."
+          ])
+        ) (lib.splitString "/" value)
+      )
+    );
+  validTask =
+    value:
+    isString value
+    && lib.hasPrefix ":" value
+    && value != ":"
+    && !(lib.hasSuffix ":" value)
+    && !(lib.hasInfix "::" value)
+    && !(lib.hasInfix "/" value)
+    && !(lib.hasInfix "\\" value)
+    && match ".*[[:cntrl:]].*" value == null;
+  validLinkUrl =
+    value:
+    if !isString value then
+      false
+    else
+      let
+        parts = match "[Hh][Tt][Tt][Pp]([Ss])?://([^/?#]+)(/[^?#]*)?" value;
+        authority = if parts == null then "" else elemAt parts 1;
+        hostPort = match "([[][0-9A-Fa-f:.]+[]]|[A-Za-z0-9.-]+)(:([0-9]+))?" authority;
+        port = if hostPort == null then null else elemAt hostPort 2;
+        path = if parts == null || elemAt parts 2 == null then "" else elemAt parts 2;
+        decoded =
+          builtins.replaceStrings [ "%2e" "%2E" "%2f" "%2F" "%5c" "%5C" ] [ "." "." "/" "/" "\\" "\\" ]
+            path;
+      in
+      parts != null
+      && hostPort != null
+      && match ".*[[:cntrl:][:space:]].*" value == null
+      && !(lib.hasInfix "\\" decoded)
+      && !(lib.hasInfix "//" decoded)
+      && lib.all (
+        segment:
+        !(builtins.elem segment [
+          "."
+          ".."
+        ])
+      ) (lib.splitString "/" decoded)
+      && match ".*%([01][0-9a-f]|7f|c2%[89][0-9a-f]).*" (lib.toLower path) == null
+      && (
+        port == null
+        || (
+          builtins.stringLength port <= 5
+          && match "(0|[1-9][0-9]*)" port != null
+          && builtins.fromJSON port <= 65535
+        )
+      );
+  isResource =
+    resource:
+    isAttrs resource
+    &&
+      builtins.attrNames resource == [
+        "artifactUrl"
+        "build"
+        "hash"
+        "kind"
+        "linkUrl"
+        "task"
+      ]
+    && (resource.kind or null) == "javadoc-link-metadata"
+    && validRelativeBuild resource.build
+    && validTask resource.task
+    && validLinkUrl resource.linkUrl
+    && isString resource.artifactUrl
+    && builtins.elem resource.artifactUrl (
+      map
+        (
+          filename:
+          resource.linkUrl + lib.optionalString (!(lib.hasSuffix "/" resource.linkUrl)) "/" + filename
+        )
+        [
+          "element-list"
+          "package-list"
+        ]
+    )
+    && isSha256Sri resource.hash;
+  resourceProblem =
+    if !(isList (raw.resources or [ ]) && lib.all isResource (raw.resources or [ ])) then
+      "has an invalid external resource role"
+    else
+      let
+        keys = map (
+          resource:
+          toJSON [
+            resource.build
+            resource.task
+            resource.linkUrl
+          ]
+        ) (raw.resources or [ ]);
+      in
+      if builtins.length keys != builtins.length (lib.unique keys) then
+        "has duplicate external resource roles"
+      else
+        null;
+
   # The first problem of the lockfile's structure, or null.
   structureProblem =
     if !isAttrs raw then
@@ -158,6 +273,8 @@ let
       "has an artifact that is neither { url, hash } nor { path, contents }"
     else if projectJdkProblem != null then
       projectJdkProblem
+    else if resourceProblem != null then
+      resourceProblem
     else if contentHashOf raw != raw.contentHash then
       "does not match its contentHash, so it was edited"
     else
@@ -277,6 +394,7 @@ in
   outputs = if usable then outputs else { };
   inherit problems;
   gradle = lib.optionalAttrs usable {
+    resources = raw.resources or [ ];
     inherit (raw)
       javaMajor
       distribution

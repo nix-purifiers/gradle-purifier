@@ -23,6 +23,7 @@ def keys = [
     'gradle.purifier.jdk.context',
     'gradle.purifier.sdk.root',
     'gradle.purifier.repository',
+    'gradle.purifier.resources',
     'gradle.purifier.provided.repository',
     'gradle.purifier.provided.catalog',
     'gradle.purifier.konan.properties',

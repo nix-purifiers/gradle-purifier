@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MIT
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+allprojects { group = 'example'; version = '1.0' }
+project(':external') { apply plugin: 'java-library' }
+dependencies { api project(':external') }
+javadoc {
+    options.links(project.findProperty('docsUrl') ?: 'http://127.0.0.1:18086/api/')
+    options.addBooleanOption('notimestamp', true)
+}
+def docs = tasks.register('javadocJar', Jar) {
+    from tasks.javadoc
+    archiveClassifier = 'javadoc'
+}
+publishing {
+    publications { maven(MavenPublication) { from components.java; artifact docs } }
+}
