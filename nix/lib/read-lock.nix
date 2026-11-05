@@ -172,7 +172,7 @@ let
       let
         parts = match "[Hh][Tt][Tt][Pp]([Ss])?://([^/?#]+)(/[^?#]*)?" value;
         authority = if parts == null then "" else elemAt parts 1;
-        hostPort = match "([[][0-9A-Fa-f:.]+[]]|[A-Za-z0-9.-]+)(:([0-9]+))?" authority;
+        hostPort = match "([A-Za-z0-9.-]+)(:([0-9]+))?" authority;
         port = if hostPort == null then null else elemAt hostPort 2;
         path = if parts == null || elemAt parts 2 == null then "" else elemAt parts 2;
         decoded =

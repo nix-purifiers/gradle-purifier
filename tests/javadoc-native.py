@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 import zipfile
 
 
@@ -129,7 +129,9 @@ def main():
         for name, link_value in [('query-link', 'https://example.invalid/api/?v=1'),
                                  ('traversal-link', 'https://example.invalid/api/../'),
                                  ('encoded-traversal-link', 'https://example.invalid/api/%2e%2e/'),
-                                 ('invalid-port-link', 'http://127.0.0.1:65536/api/')]:
+                                 ('invalid-port-link', 'http://127.0.0.1:65536/api/'),
+                                 ('unsupported-ipv6-link', 'http://[::1]:8080/api/'),
+                                 ('malformed-ipv6-link', 'http://[:::]/api/')]:
             malformed_roles.append((name, [dict(record, linkUrl=link_value,
                 artifactUrl=link_value + 'package-list')], 'unsupported Javadoc link URL'))
         for name, records, diagnostic in malformed_roles:
@@ -147,6 +149,22 @@ def main():
         run('tampered-bytes', command, negative_env, success=False, contains='hash mismatch')
         role_file.write_text(json.dumps([dict(record, artifactUrl=link + 'extra/package-list')]))
         run('non-native-metadata-location', command, negative_env, success=False, contains='does not name native link metadata')
+        url_tree = work / 'url-control-repository'
+        url_tree.mkdir()
+        url_env = dict(negative_env, GRADLE_PURIFIER_REPOSITORY=url_tree.as_uri())
+        for name, suffix in [('escaped-space-directory', 'escaped%20space/'),
+                             ('literal-percent-directory', 'literal%2520percent/')]:
+            url_link = link + suffix
+            role = dict(record, linkUrl=url_link, artifactUrl=url_link + 'package-list')
+            role_file.write_text(json.dumps([role]))
+            uri = urlsplit(role['artifactUrl'])
+            metadata_file = url_tree / uri.scheme / uri.netloc / unquote(uri.path).lstrip('/')
+            metadata_file.parent.mkdir(parents=True)
+            metadata_file.write_bytes(b'external\n')
+            url_command = [f'-PdocsUrl={url_link}' if str(arg).startswith('-PdocsUrl=') else arg
+                           for arg in command]
+            run(name, url_command, url_env)
+            assert (source / 'build/purifier-javadoc/javadoc/0/package-list').read_bytes() == b'external\n'
         server = http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler)
         state['contents'] = b'external\nfreshpackage\n'
         threading.Thread(target=server.serve_forever, daemon=True).start()
