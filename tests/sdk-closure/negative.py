@@ -45,7 +45,7 @@ def main():
         rejected(name,aliased,'ambient or mutable')
     # A different Nix output with identical release metadata is not the pinned SDK.
     fake_expr='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
-      p=import f.inputs.nixpkgs {system=builtins.currentSystem;};
+      p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[];};
       in p.runCommand "different-sdk-release-metadata" {release="${p.jdk8_headless}/lib/openjdk/release";} ''
         mkdir -p "$out/lib/openjdk/bin"
         cp "$release" "$out/lib/openjdk/release"
@@ -59,14 +59,24 @@ def main():
     rejected('same-release-different-output',other,'does not match the pinned Nix SDK output')
     original=json.loads((project/'gradle-purifier.lock.json').read_text())
     evaluate='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
-      p=import f.inputs.nixpkgs {system=builtins.currentSystem;overlays=[f.overlays.default];};
+      p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};
       in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "SDK_PROJECT";
         lockFile=/. + builtins.getEnv "SDK_LOCK";}).sdkContext.drvPath'''
-    def nix_reject(name,lock,needle,rehash=True,build=False):
+    def nix_reject(name,lock,needle,rehash=True,build=False,read_boundary=False):
         if rehash:
             payload=json.dumps({k:v for k,v in lock.items() if k!='contentHash'},sort_keys=True,separators=(',',':'),ensure_ascii=False)
             lock['contentHash']='sha256:'+hashlib.sha256(payload.encode()).hexdigest()
         file=out/(name+'.lock.json');file.write_text(json.dumps(lock,indent=2)+'\n')
+        if read_boundary:
+            boundary='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
+              p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[];};
+              read=import (/. + builtins.getEnv "SDK_SOURCE" + "/nix/lib/read-lock.nix") {lib=p.lib;};
+              in (read {src=/. + builtins.getEnv "SDK_PROJECT";lockFile=/. + builtins.getEnv "SDK_LOCK";}).problems'''
+            observed=subprocess.check_output(['nix','eval','--json','--impure','--expr',boundary],
+                env=dict(env,SDK_LOCK=str(file)),text=True,timeout=30)
+            (out/(name+'.read-lock.json')).write_text(observed)
+            problems=json.loads(observed)
+            assert problems and any(needle in problem for problem in problems),(name,problems)
         expression=evaluate.replace('.sdkContext.drvPath','.tests') if build else evaluate
         command=['nix','build','--no-link','--print-build-logs'] if build else ['nix','eval','--raw']
         result=subprocess.run([*command,'--impure','--expr',expression],env=dict(env,SDK_LOCK=str(file)),text=True,capture_output=True,timeout=240)
@@ -81,6 +91,23 @@ def main():
     nix_reject('nix-identity',changed,'project SDK Nix identity differs')
     changed=copy.deepcopy(original);changed['projectJdks']={'wrong-platform':changed['projectJdks'][key]}
     nix_reject('wrong-platform',changed,'project SDK lock has no context')
+    changed=copy.deepcopy(original);context=changed['projectJdks'][key]
+    context['sdks'].append(copy.deepcopy(context['sdks'][0]))
+    nix_reject('duplicate-sdk-identity',changed,'duplicate project SDK identities',read_boundary=True)
+    for name,conflicting in [('duplicate-identical-role',False),('duplicate-conflicting-role',True)]:
+        changed=copy.deepcopy(original);context=changed['projectJdks'][key];role=copy.deepcopy(context['roles'][0])
+        if conflicting:role['sdk']=next(sdk['identityHash'] for sdk in context['sdks'] if sdk['identityHash']!=role['sdk'])
+        context['roles'].append(role)
+        nix_reject(name,changed,'duplicate project SDK task roles',read_boundary=True)
+    changed=copy.deepcopy(original);changed['projectJdks'][key]['roles'][0]['sdk']='f'*64
+    nix_reject('unknown-role-sdk',changed,'role referencing an unknown SDK identity',read_boundary=True)
+    changed=copy.deepcopy(original);context=changed['projectJdks'][key];old=context['sdks'][0]['identityHash']
+    context['sdks'][0]['identityHash']='short-hash'
+    for role in context['roles']:
+        if role['sdk']==old:role['sdk']='short-hash'
+    nix_reject('malformed-sdk-identity',changed,'malformed project SDK contexts',read_boundary=True)
+    changed=copy.deepcopy(original);changed['projectJdks'][key]['sdks'][0]['source']['narHash']='sha256-not-valid'
+    nix_reject('malformed-sdk-source-hash',changed,'malformed project SDK contexts',read_boundary=True)
     changed=copy.deepcopy(original);del changed['projectJdks']
     nix_reject('legacy-lock-foreign-sdk',changed,'non-manager SDK absent from this lock',build=True)
     # Existing explicit typed SDK input API still authorizes the legacy use.
