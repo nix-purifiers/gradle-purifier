@@ -1,0 +1,88 @@
+{
+  "observations": [
+    {
+      "profile": "gradle-2.14.1",
+      "managerHome": "/nix/store/7dx0p0s94s5dc69chlcfh4wvdp27nxcd-openjdk-headless-8u504-b01/lib/openjdk",
+      "managerVersion": "8u504-b01",
+      "distributionUrl": "https://services.gradle.org/distributions/gradle-2.14.1-bin.zip",
+      "distributionSha256": "cfc61eda71f2d12a572822644ce13d2919407595c2aec3e3566d2aab6f97ef39",
+      "helpSha256": "d4806f6536609c6c8a202b71c08d0289cf0e7f8b2c19622d1662705ea753c77b",
+      "flags": {
+        "capture": [
+          "--no-daemon",
+          "--console=plain"
+        ],
+        "sandbox": [
+          "--no-daemon",
+          "--console=plain"
+        ],
+        "publish": [
+          "--no-daemon"
+        ]
+      },
+      "nativeHelpDidNotLoadInitOrTasks": true,
+      "selectedFlagsAcceptedByNativeParser": true
+    },
+    {
+      "profile": "gradle-8.14.3",
+      "managerHome": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk",
+      "managerVersion": "21.0.12.1+1",
+      "distributionUrl": "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
+      "distributionSha256": "bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531",
+      "helpSha256": "3c1482656f0e22e1eafc425d5c7a7f3a25249a46e1d5b4ae11c052ba67ea1aa3",
+      "flags": {
+        "capture": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache",
+          "--console=plain"
+        ],
+        "sandbox": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache",
+          "--no-watch-fs",
+          "--console=plain"
+        ],
+        "publish": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache"
+        ]
+      },
+      "nativeHelpDidNotLoadInitOrTasks": true,
+      "selectedFlagsAcceptedByNativeParser": true
+    },
+    {
+      "profile": "gradle-9.9.0-rc-1",
+      "managerHome": "/nix/store/8av96xmb7arqavl2n3nwskrhk5q31h85-openjdk-headless-21.0.12.1+1/lib/openjdk",
+      "managerVersion": "21.0.12.1+1",
+      "distributionUrl": "https://services.gradle.org/distributions/gradle-9.9.0-rc-1-bin.zip",
+      "distributionSha256": "ef02c92a61020a0e4e0cfe2c8d6e00235538e0109e50364dd40f2065a267add3",
+      "helpSha256": "070c97429c9b70aa835279e4065631abec7aafb03349efcdb5c4789e21a0f5ef",
+      "flags": {
+        "capture": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache",
+          "--console=plain"
+        ],
+        "sandbox": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache",
+          "--no-watch-fs",
+          "--console=plain"
+        ],
+        "publish": [
+          "--no-daemon",
+          "--no-configuration-cache",
+          "--no-build-cache"
+        ]
+      },
+      "nativeHelpDidNotLoadInitOrTasks": true,
+      "selectedFlagsAcceptedByNativeParser": true
+    }
+  ],
+  "scope": "Actual --help and CLI parsing only on existing epoch profiles; no project compatibility/support claim"
+}

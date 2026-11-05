@@ -300,6 +300,15 @@ in
         touch $out
       '';
 
+  gradle-flags-unit = runCommand "gradle-flags-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    mkdir -p tests/gradle-flags-help nix/lib
+    cp ${./test_gradle_flags.py} tests/test_gradle_flags.py
+    cp -r ${./gradle-flags-help}/. tests/gradle-flags-help/
+    cp ${../nix/lib/gradle-flags.py} nix/lib/gradle-flags.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_gradle_flags.py
+    touch $out
+  '';
+
   # The command's parsing (tests/cli-unit.sh).
   cli-unit = runCommand "cli-unit" { nativeBuildInputs = [ pkgs.jq ]; } ''
     bash ${./cli-unit.sh} ${lib.getExe gradle-purifier}

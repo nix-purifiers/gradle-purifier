@@ -26,8 +26,8 @@
   unzip,
 }:
 let
-  # The JDK the command runs Gradle and the recorder on when JAVA_HOME is
-  # unset.
+  # The recorder always uses this runtime; Gradle uses it when JAVA_HOME
+  # and the selected Java version do not request another JDK.
   jdk = jdk21_headless;
 
   recorder = stdenvNoCC.mkDerivation {
@@ -39,7 +39,7 @@ let
       runHook preBuild
       # javac wants a public class in a file of its name.
       cp "$src" Recorder.java
-      # Gradle 9 runs on Java 17 and later, so the recorder does too.
+      # The recorder uses Java 17 APIs independently of the Gradle runtime.
       javac --release 17 -Xlint:all -Werror -d "$out" Recorder.java
       runHook postBuild
     '';
