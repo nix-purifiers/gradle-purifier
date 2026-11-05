@@ -246,7 +246,9 @@ or runtime executable can identify its SDK. The lock records this as
 the exact pinned Nix SDK output. Mutable aliases, same-version replacement outputs
 and conflicts between a provider and explicit executable fail. For a native Test
 task with neither a typed provider nor an explicit executable, the public fork-options
-copy API reads its effective runtime without setting task defaults. The lock records
+copy API reads its effective runtime without setting task defaults. Resolving this
+lazy native calculation can populate Gradle's internal toolchain metadata caches.
+The lock records
 `native-effective-fork-options` for that launcher and reconstructs its exact immutable
 SDK. Unsupported, ambiguous or malformed copies fail. Other unknown selections remain
 errors; disabled tasks are not omitted. Graph, pre-task and post-task selection changes
