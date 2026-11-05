@@ -1,0 +1,77 @@
+// Diagnostic only: resolved task providers are selection evidence, not execution proof.
+import groovy.json.JsonOutput
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.javadoc.Javadoc
+
+def destination = System.getenv('GRADLE_SDK_TELEMETRY')
+if (!destination) throw new GradleException('GRADLE_SDK_TELEMETRY must name the diagnostic receipt')
+def receipt = [scope: 'Gradle 8.14.3 feasibility only; no compatibility certification',
+    manager: [javaHome: System.getProperty('java.home'), javaVersion: System.getProperty('java.version')],
+    graph: [], tasks: [:], unobserved: []]
+def flush = {
+    def file = new File(destination)
+    file.parentFile.mkdirs()
+    file.text = JsonOutput.prettyPrint(JsonOutput.toJson(receipt))
+}
+def pathInfo = { value ->
+    if (value == null) return null
+    def file = value instanceof File ? value : new File(value.toString())
+    [configured: file.absolutePath, canonical: file.canonicalPath, exists: file.exists()]
+}
+def inspect = { task ->
+    def kind = task instanceof JavaCompile ? 'compiler' : task instanceof Javadoc ? 'javadoc' :
+        (task instanceof Test || task instanceof JavaExec) ? 'launcher' : null
+    if (kind == null) return null
+    def providerName = kind == 'compiler' ? 'javaCompiler' : kind == 'javadoc' ? 'javadocTool' : 'javaLauncher'
+    def result = [task: task.path, type: task.class.name, role: kind, provenance: 'resolved-selected-task-provider']
+    try {
+        def provider = task.property(providerName)
+        if (provider.present) {
+            def tool = provider.get()
+            def metadata = tool.metadata
+            result.provider = [home: pathInfo(metadata.installationPath.asFile),
+                executable: pathInfo(tool.executablePath.asFile),
+                languageVersion: metadata.languageVersion.toString(), vendor: metadata.vendor.toString(),
+                javaRuntimeVersion: metadata.javaRuntimeVersion]
+        } else result.provider = [present: false]
+    } catch (Exception error) {
+        result.providerError = error.class.name + ': ' + error.message
+    }
+    if (task instanceof JavaCompile) {
+        result.fork = task.options.fork
+        result.forkExecutable = pathInfo(task.options.forkOptions.executable)
+        result.forkJavaHome = pathInfo(task.options.forkOptions.javaHome)
+    } else result.taskExecutable = pathInfo(task.executable)
+    result
+}
+gradle.taskGraph.whenReady { graph ->
+    receipt.graph = graph.allTasks.collect { it.path }
+    graph.allTasks.each { task ->
+        def selected = inspect(task)
+        if (selected != null) receipt.tasks[task.path] = selected
+    }
+    gradle.rootProject.allprojects.each { project ->
+        project.tasks.each { task ->
+            if (!graph.hasTask(task) && (task instanceof JavaCompile || task instanceof Javadoc ||
+                    task instanceof Test || task instanceof JavaExec)) {
+                receipt.unobserved << [task: task.path, type: task.class.name, reason: 'outside selected task graph; provider not resolved']
+            }
+        }
+    }
+    flush()
+}
+gradle.taskGraph.afterTask { task, state ->
+    if (receipt.tasks.containsKey(task.path)) {
+        receipt.tasks[task.path].outcome = [executed: state.executed, skipped: state.skipped,
+            skipMessage: state.skipMessage, upToDate: state.upToDate, noSource: state.noSource,
+            failed: state.failure != null]
+        receipt.tasks[task.path].atCompletion = inspect(task)
+        flush()
+    }
+}
+gradle.buildFinished { result ->
+    receipt.buildSucceeded = result.failure == null
+    flush()
+}
