@@ -3,12 +3,16 @@
 """Exercise immutable common-init hint selection on existing native controls."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
+
+sys.dont_write_bytecode = True
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--cli', type=Path, required=True)
@@ -30,6 +34,19 @@ def classifier(text):
     return text[text.index('    // Whether a failure'):text.index('\n}', text.index('    // Whether a failure'))]
 assert classifier(modern) == classifier(legacy), 'classifier drift'
 sdks = json.loads(args.sdks.read_text())
+profiles = json.loads((root / 'tests/epoch-probes/profiles.json').read_text())['profiles']
+spec = importlib.util.spec_from_file_location('epoch_probe', root / 'tests/epoch-probes/probe.py')
+epoch = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(epoch)
+args.cache = args.cache.resolve()
+args.cache.mkdir(parents=True, exist_ok=True)
+context = dict(sourceRevision=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
+               sdkInputs=sdks, cli=str(args.cli.resolve()), immutableLib=str(lib),
+               profiles=[p for p in profiles if p['gradle'] in ['7.6.6', '8.14.3', '9.9.0-rc-1']],
+               sourceHashes={p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in
+                             subprocess.check_output(['git', 'ls-files'], cwd=root, text=True).splitlines()
+                             if (root / p).is_file()})
+(output / 'context.json').write_text(json.dumps(context, indent=2) + '\n')
 rows = []
 for version, sdk in [('7.6.6', 'java17'), ('8.14.3', 'java21'), ('9.9.0-rc-1', 'java21')]:
     work = output / version
@@ -52,7 +69,8 @@ tasks.register('unrelatedFailure') { doLast { throw new GradleException('unrelat
     repository.mkdir()
     env = dict(os.environ, JAVA_HOME=sdks[sdk]['home'], GRADLE_USER_HOME=str(work / 'gradle-home'),
                GRADLE_PURIFIER_MODE='interactive', GRADLE_PURIFIER_REPOSITORY=repository.as_uri())
-    gradle = args.cache.resolve() / ('gradle-' + version) / 'bin/gradle'
+    profile = next(p for p in profiles if p['gradle'] == version)
+    gradle = epoch.distribution(profile, args.cache)
     for task, succeeds, hint in [('help', True, False), ('compileJava', False, True),
                                  ('nestedFailure', False, True), ('unrelatedFailure', False, False)]:
         command = [shutil.which('bash'), str(gradle), '--offline', '--no-daemon', '--console=plain',
