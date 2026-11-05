@@ -9,6 +9,12 @@ import subprocess
 
 
 def capture(receipt, descriptor, expression):
+    for row in receipt['tasks']:
+        provenance = row.get('selectionProvenance', 'resolved-selected-provider')
+        if provenance not in {'resolved-selected-provider', 'configured-native-executable'}:
+            raise ValueError('unsupported SDK selection provenance for ' + row['task'])
+        if provenance == 'configured-native-executable' and row['role'] not in {'compiler', 'launcher'}:
+            raise ValueError('explicit executable SDK provenance is unsupported for ' + row['role'])
     if not receipt['tasks'] or all(row['home']==receipt['managerHome'] and row['home']==row['canonicalHome'] for row in receipt['tasks']):
         return {}  # Preserve the existing manager-only lock contract and byte identity.
     if not descriptor:
@@ -37,7 +43,7 @@ def capture(receipt, descriptor, expression):
             raise ValueError('selected SDK for '+row['task']+' does not match the pinned Nix SDK output, even if its Java version matches; select that exact Nix SDK and run gradle-purifier lock --relock')
         key = candidate['identityHash']
         sdks[key] = dict(candidate, source=descriptor['source'])
-        roles.append(dict(task=row['task'], role=row['role'], sdk=key, provenance='resolved-selected-provider'))
+        roles.append(dict(task=row['task'], role=row['role'], sdk=key, provenance=row.get('selectionProvenance', 'resolved-selected-provider')))
     return {descriptor['system']: dict(sdks=[sdks[key] for key in sorted(sdks)],
         roles=sorted(roles, key=lambda row: (row['task'], row['role'])))}
 
