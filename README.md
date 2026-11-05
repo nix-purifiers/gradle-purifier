@@ -356,9 +356,18 @@ Some files are recorded in a particular way:
   [nix-ld](https://github.com/nix-community/nix-ld) provides, because it
   runs the toolchain before anything can patch it.
 
+External links on standard Javadoc tasks are captured as pinned `element-list`
+or `package-list` inputs. Replay retains the original public documentation URL,
+including when the metadata server is unavailable. `lock --relock` preserves the
+pinned metadata; `update` refreshes it. These links currently require
+credential-free HTTP(S) directory URLs with DNS names or IPv4 hosts, without
+queries, fragments or traversal segments. IPv6 hosts are rejected before capture
+or replay because the repository mapper does not support their authority syntax.
+Custom doclets and other remote Javadoc inputs are outside this capture path.
+
 The lock refuses these:
 
-- **Downloads outside the repositories.** Gradle's own HTTP client gets a
+- **Other downloads outside the repositories.** Gradle's own HTTP client gets a
   proxy that refuses every connection, so a plugin that downloads with
   its own client fails in the lock run rather than later in the sandbox.
   The file needs a repository that the build declares.
@@ -417,12 +426,3 @@ gradle-purifier prefetch
 
 The purifier idea was inspired by nixcloud's
 [cargo (libnix)](https://github.com/nixcloud/cargo).
-
-External links on standard Javadoc tasks are captured as pinned `element-list`
-or `package-list` inputs. Replay retains the original public documentation URL,
-including when the metadata server is unavailable. `lock --relock` preserves the
-pinned metadata; `update` refreshes it. These links currently require
-credential-free HTTP(S) directory URLs with DNS names or IPv4 hosts, without
-queries, fragments or traversal segments. IPv6 hosts are rejected before capture
-or replay because the repository mapper does not support their authority syntax.
-Custom doclets and other remote Javadoc inputs are outside this capture path.
