@@ -139,7 +139,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/gradle-sdk-proof"
           git rev-parse HEAD > "$RUNNER_TEMP/gradle-sdk-proof/source-revision"
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - name: Build candidate, baseline and the two existing SDKs
+      - name: Build candidate, baseline and the existing SDKs
         shell: bash
         run: |
           nix build .#default --out-link "$RUNNER_TEMP/gradle-sdk-candidate"
@@ -190,6 +190,22 @@ jobs:
             --cache "$RUNNER_TEMP/gradle-sdk-distributions" \
             --sdks "$RUNNER_TEMP/gradle-sdk-proof/explicit-sdks.json" \
             --output "$RUNNER_TEMP/gradle-sdk-proof/explicit-native"
+      - name: Validate native Test runtime identity and failed-copy guards
+        run: |
+          python tests/sdk-closure/native-test-options.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --cache "$RUNNER_TEMP/gradle-sdk-distributions" \
+            --sdks "$RUNNER_TEMP/gradle-sdk-proof/explicit-sdks.json" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/native-test-options"
+      - name: Allow namespaces for the cold legacy SDK control
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Replay the unchanged legacy fixture with cold caches and network isolation
+        run: |
+          python tests/sdk-closure/legacy-lifecycle.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --cache "$RUNNER_TEMP/gradle-sdk-distributions" \
+            --sdks "$RUNNER_TEMP/gradle-sdk-proof/explicit-sdks.json" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/legacy-lifecycle"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -208,6 +224,15 @@ jobs:
             ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*.json
             ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*/*.log
             ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*/output/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*/runtime.properties
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*/output/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/native-test-options/*/build/test-results/test/*.xml
+            ${{ runner.temp }}/gradle-sdk-proof/legacy-lifecycle/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/legacy-lifecycle/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/legacy-lifecycle/*.jar
 
   javadoc-link-metadata:
     runs-on: ubuntu-latest

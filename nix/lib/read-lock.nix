@@ -101,6 +101,7 @@ let
           "launcher"
         ]
       )
+      || (role.provenance or null == "native-effective-fork-options" && role.role == "launcher")
     );
   isSdkContext =
     context:

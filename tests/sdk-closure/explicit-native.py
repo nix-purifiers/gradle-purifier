@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Adapter-only SDK selection controls; the full legacy fixture remains unsupported."""
+"""Validate explicit and native-fork SDK selections on the existing legacy fixture."""
 from pathlib import Path
 import argparse,hashlib
 import importlib.util,json,os,subprocess,re
@@ -11,22 +11,27 @@ parser.add_argument('--sdks',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 args=parser.parse_args()
 repo=Path(__file__).resolve().parents[2];out=args.output.resolve();out.mkdir(parents=True,exist_ok=False);cli=args.cli.resolve();variables={k:v for k,v in re.findall(r'^(lib|sdk_descriptor)=(.+)$',cli.read_text(),re.M)};lib=Path(variables['lib']);descriptor=json.loads(Path(variables['sdk_descriptor']).read_text());spec=importlib.util.spec_from_file_location('epoch',repo/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch);spec=importlib.util.spec_from_file_location('capture',repo/'nix/lib/capture-project-jdks.py');capture=importlib.util.module_from_spec(spec);spec.loader.exec_module(capture);sdks=json.loads(args.sdks.read_text());profile=next(p for p in json.loads((repo/'tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-7.6.6');args.cache=args.cache.resolve();args.cache.mkdir(parents=True,exist_ok=True);gradle=epoch.distribution(profile,args.cache)
-context=dict(scope='Native SDK adapter only; no complete legacy purifier lifecycle credit',sdkInputs=sdks,profile=profile,
+context=dict(scope='Native SDK selection controls; full lifecycle proof is recorded separately.',sdkInputs=sdks,profile=profile,
  sourceRevision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),cli=str(cli),immutableLib=str(lib),
  sourceHashes={p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=repo,text=True).splitlines() if (repo/p).is_file()})
 (out/'context.json').write_text(json.dumps(context,indent=2)+'\n')
 alias=out/'mutable-sdk';alias.symlink_to(sdks['java8']['home']);rows=[]
-# Retain the unchanged full purifier failure: selecting explicit native roles
-# here does not certify the disabled Test task or the complete legacy lifecycle.
+# The unchanged full fixture now records the native Test effective runtime.
+# Its disabled Test task still supplies selection, not runtime execution credit.
 full=out/'preserved-full-barrier';full.mkdir();epoch.fixture(full/'project',profile,sdks)
 full_env=dict(os.environ,JAVA_HOME=sdks['java17']['home'],GRADLE_USER_HOME=str(full/'gradle-home'),HOME=str(full/'home'))
 Path(full_env['HOME']).mkdir()
 with (full/'run.log').open('w') as log:
  failure=subprocess.run([str(cli),'lock'],cwd=full/'project',env=full_env,stdout=log,stderr=subprocess.STDOUT,timeout=180)
-assert failure.returncode!=0 and ':test has no selected SDK' in (full/'run.log').read_text()
-rows.append(dict(case='unchanged-full-fixture-unknown-test',exitCode=failure.returncode,rejected=True))
+assert failure.returncode==0,(full/'run.log').read_text()[-4000:]
+full_lock=json.loads((full/'project/gradle-purifier.lock.json').read_text())
+full_context=full_lock['projectJdks']['x86_64-linux']
+test_role=next(role for role in full_context['roles'] if role['task']==':test')
+assert test_role['provenance']=='native-effective-fork-options'
+assert next(sdk for sdk in full_context['sdks'] if sdk['identityHash']==test_role['sdk'])['home']==sdks['java17']['home']
+rows.append(dict(case='unchanged-full-fixture-native-test-runtime',exitCode=failure.returncode,accepted=True))
 (out/'report.json').write_text(json.dumps(rows,indent=2)+'\n')
-print('unchanged full fixture barrier PASS',flush=True)
+print('unchanged full fixture native runtime PASS',flush=True)
 for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conflict','compiler-wrong-binary','launcher-wrong-binary']:
  if name=='alias-retargeted':alias.unlink();alias.symlink_to(sdks['java17']['home'])
  case=out/name;case.mkdir();project=case/'project';epoch.fixture(project,profile,sdks);build=project/'build.gradle';text=build.read_text()
@@ -101,5 +106,10 @@ changed=copy.deepcopy(accepted);changed['x86_64-linux']['roles'][0]['provenance'
 boundary('public-unknown-provenance',changed,False)
 changed=copy.deepcopy(accepted);changed['x86_64-linux']['roles'][0]['role']='javadoc'
 boundary('public-unsupported-explicit-role',changed,False)
+changed=copy.deepcopy(accepted);changed['x86_64-linux']['roles'][0]['provenance']='native-effective-fork-options'
+boundary('public-unsupported-native-runtime-role',changed,False)
+changed=copy.deepcopy(receipt);changed['tasks'][0]['selectionProvenance']='native-effective-fork-options'
+rejected_receipt('capture-unsupported-native-runtime-role',changed,'native fork-options SDK provenance is unsupported for compiler')
+
 (out/'report.json').write_text(json.dumps(rows,indent=2)+'\n')
 print('public provenance boundaries PASS',flush=True)

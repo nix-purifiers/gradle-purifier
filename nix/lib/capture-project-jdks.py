@@ -11,11 +11,13 @@ import subprocess
 def capture(receipt, descriptor, expression):
     for row in receipt['tasks']:
         provenance = row.get('selectionProvenance', 'resolved-selected-provider')
-        if provenance not in {'resolved-selected-provider', 'configured-native-executable'}:
+        if provenance not in {'resolved-selected-provider', 'configured-native-executable', 'native-effective-fork-options'}:
             raise ValueError('unsupported SDK selection provenance for ' + row['task'])
         if provenance == 'configured-native-executable' and row['role'] not in {'compiler', 'launcher'}:
             raise ValueError('explicit executable SDK provenance is unsupported for ' + row['role'])
-        if provenance == 'configured-native-executable':
+        if provenance == 'native-effective-fork-options' and row['role'] != 'launcher':
+            raise ValueError('native fork-options SDK provenance is unsupported for ' + row['role'])
+        if provenance in {'configured-native-executable', 'native-effective-fork-options'}:
             binary = 'javac' if row['role'] == 'compiler' else 'java'
             if row['executable'] != str(Path(row['home']) / 'bin' / binary):
                 raise ValueError('explicit SDK executable does not match ' + row['role'] + ' role')
