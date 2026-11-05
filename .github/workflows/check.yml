@@ -244,3 +244,45 @@ jobs:
             ${{ runner.temp }}/gradle-javadoc-proof/native/*.json
             ${{ runner.temp }}/gradle-javadoc-proof/native/*.log
             ${{ runner.temp }}/gradle-javadoc-proof/schema/*.json
+
+  native-missing-hint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build candidate and existing native hint SDKs
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-hint-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-hint-proof/source-revision"
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-hint-candidate"
+          nix build --inputs-from . 'nixpkgs#jdk17_headless' 'nixpkgs#jdk21_headless' --no-link
+          # The SDK home interpolation below belongs to Nix.
+          # shellcheck disable=SC2016
+          nix eval --impure --json --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+                describe = j: { path = toString j; home = j.home or "${j}/lib/openjdk"; version = j.version; };
+            in { java17 = describe p.jdk17_headless; java21 = describe p.jdk21_headless; }
+          ' > "$RUNNER_TEMP/gradle-hint-proof/sdks.json"
+      - name: Preserve native failure hints on the existing legacy and modern controls
+        run: |
+          python3 tests/missing-hint-native.py \
+            --cli "$RUNNER_TEMP/gradle-hint-candidate/bin/gradle-purifier" \
+            --cache "$RUNNER_TEMP/gradle-hint-distributions" \
+            --sdks "$RUNNER_TEMP/gradle-hint-proof/sdks.json" \
+            --output "$RUNNER_TEMP/gradle-hint-proof/native"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-native-missing-hint
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/gradle-hint-proof/source-revision
+            ${{ runner.temp }}/gradle-hint-proof/sdks.json
+            ${{ runner.temp }}/gradle-hint-proof/native/*.json
+            ${{ runner.temp }}/gradle-hint-proof/native/*/*.log
