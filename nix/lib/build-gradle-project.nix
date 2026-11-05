@@ -128,6 +128,7 @@ let
         type == "directory"
         && (lib.elem name [
           ".gradle"
+          ".gradle-purifier"
           ".kotlin"
           ".idea"
         ])
@@ -152,6 +153,45 @@ let
       or (throw "gradle-purifier: javaPackages has no openjdk${toString gradle.javaMajor} for the Java the lock was made with; pass `jdk`.");
   jdk' = if jdk != null then jdk else defaultJdk;
   javaHome = j: j.home or "${j}/lib/openjdk";
+  hasProjectJdks = gradle.projectJdks != null;
+  selectedProjectJdks =
+    if hasProjectJdks then
+      (import ./project-jdks.nix { inherit lib purifier; }) {
+        contexts = gradle.projectJdks;
+        system = stdenv.hostPlatform.system;
+      }
+    else
+      {
+        jdks = [ ];
+        roles = [ ];
+      };
+  explicitToolchainJdks = map (
+    sdk:
+    assert
+      (
+        builtins.getContext (toString sdk) != { }
+        && builtins.getContext (javaHome sdk) != { }
+        && lib.hasPrefix "${builtins.storeDir}/" (javaHome sdk)
+      )
+      || throw "gradle-purifier: toolchainJdks must carry explicit Nix package context, not an ambient host path";
+    sdk
+  ) toolchainJdks;
+  allToolchainJdks = explicitToolchainJdks ++ selectedProjectJdks.jdks;
+  hasSdkContext = hasProjectJdks || explicitToolchainJdks != [ ];
+  sdkContext = writeText "gradle-project-sdk-context.json" (
+    builtins.toJSON (
+      if hasSdkContext then
+        {
+          legacy = !hasProjectJdks;
+          explicitHomes = map javaHome explicitToolchainJdks;
+          inherit (selectedProjectJdks) roles;
+          managerHome = javaHome jdk';
+          paths = map javaHome ([ jdk' ] ++ allToolchainJdks);
+        }
+      else
+        null
+    )
+  );
 
   fetchEntry = purifier.fetchEntry (fetcherArgs // fetchers);
 
@@ -246,6 +286,7 @@ let
     export HOME="$TMPDIR/home"
     export GRADLE_USER_HOME="$TMPDIR/gradle-home"
     export GRADLE_PURIFIER_MODE=sandbox
+    export GRADLE_PURIFIER_BUILD_ROOT="$PWD"
     export GRADLE_PURIFIER_REPOSITORY=file://${repository}
     ${lib.optionalString (projectDependencies != [ ]) ''
       export GRADLE_PURIFIER_PROVIDED_REPOSITORY=${provided.maven}
@@ -253,6 +294,9 @@ let
     ''}
     export GRADLE_PURIFIER_OUTPUT="$TMPDIR/purifier-output"
     export GRADLE_PURIFIER_CHECK=${if doCheck then "1" else "0"}
+    ${lib.optionalString hasSdkContext ''
+      export GRADLE_PURIFIER_JDK_CONTEXT=${sdkContext}
+    ''}
     export JAVA_HOME=${javaHome jdk'}
     mkdir -p "$HOME" "$GRADLE_USER_HOME"
     ${lib.optionalString hasKonan konanSetup}
@@ -261,13 +305,14 @@ let
       --offline --no-daemon --no-configuration-cache --no-build-cache --no-watch-fs \
       --console=plain --stacktrace \
       --init-script ${initScript} \
+      --init-script ${./task-jdks.init.gradle} \
       -Dorg.gradle.internal.plugins.portal.url.override=file://${repository}/${portal} \
       -Dorg.gradle.native=false \
       -Djava.io.tmpdir="$TMPDIR" \
       -Porg.gradle.java.installations.auto-download=false \
       -Porg.gradle.java.installations.auto-detect=false \
       -Porg.gradle.java.installations.paths=${
-        lib.concatMapStringsSep "," javaHome ([ jdk' ] ++ toolchainJdks)
+        lib.concatMapStringsSep "," javaHome ([ jdk' ] ++ allToolchainJdks)
       } \
       -Pkotlin.compiler.execution.strategy=in-process \
       ${lib.escapeShellArgs gradle.gradleArguments} \
@@ -535,4 +580,5 @@ in
     ;
   fetches = lock.entries;
   jdk = jdk';
+  inherit sdkContext;
 }

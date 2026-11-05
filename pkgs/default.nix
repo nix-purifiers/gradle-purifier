@@ -19,5 +19,16 @@
   # `publish`.
   gradle-purifier = callPackage ./gradle-purifier {
     purifierSource = inputs.purifier.outPath;
+    sdkSourcePath = inputs.nixpkgs.outPath;
+    sdkSource =
+      if inputs.nixpkgs ? rev && inputs.nixpkgs ? narHash then
+        {
+          type = "github";
+          owner = "NixOS";
+          repo = "nixpkgs";
+          inherit (inputs.nixpkgs) rev narHash;
+        }
+      else
+        null;
   };
 }

@@ -20,6 +20,8 @@ def portalKey = 'org.gradle.internal.plugins.portal.url.override'
 // A daemon runs many builds; what this script set for an earlier one goes.
 def keys = [
     'gradle.purifier.mode',
+    'gradle.purifier.jdk.context',
+    'gradle.purifier.sdk.root',
     'gradle.purifier.repository',
     'gradle.purifier.provided.repository',
     'gradle.purifier.provided.catalog',
@@ -69,6 +71,7 @@ if (p.getProperty('lockSha256') != sha256) {
 
 System.setProperty('gradle.purifier.ide', '1')
 System.setProperty('gradle.purifier.mode', 'interactive')
+System.setProperty('gradle.purifier.sdk.root', dir.canonicalPath)
 System.setProperty(portalKey, p.getProperty('portal'))
 // prefetch.properties names each setting of the init script by its key.
 keys.each { key ->
@@ -78,3 +81,5 @@ keys.each { key ->
     }
 }
 apply from: p.getProperty('initScript')
+
+apply from: new File(new File(p.getProperty('initScript')).parentFile, 'task-jdks.init.gradle')

@@ -30,6 +30,7 @@ recorder=@recorder@
 default_java=@java@
 lock_version=@lockVersion@
 # The nixpkgs and the nix-purifiers library the command builds with.
+sdk_descriptor=@sdkDescriptor@
 nixpkgs=@nixpkgs@
 purifier_source=@purifier@
 # The dynamic linker the programs Kotlin/Native links name, from that
@@ -489,11 +490,13 @@ run_lock() {
     KONAN_DATA_DIR=$work/konan \
       GRADLE_USER_HOME=$work/gradle-home \
       GRADLE_PURIFIER_MODE=lock \
+      GRADLE_PURIFIER_BUILD_ROOT=$work/build \
       GRADLE_PURIFIER_REPOSITORY=$base \
       GRADLE_PURIFIER_OUTPUT=$work/output \
       JAVA_HOME=$java \
       "$gradle_home/bin/gradle" \
       --init-script "$lib/purifier.init.gradle" \
+      --init-script "$lib/task-jdks.init.gradle" \
       --no-daemon --no-configuration-cache --no-build-cache --console=plain \
       "-Dorg.gradle.internal.plugins.portal.url.override=$base/$portal" \
       "-Djava.io.tmpdir=${TMPDIR:-/tmp}" \
@@ -530,9 +533,11 @@ run_lock() {
   # A large build locks more than fits in one argument, so the artifacts
   # go to jq as a file.
   artifacts_json "$records" >"$work/artifacts.json"
+  python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json"
   jq -n \
     --argjson version "$lock_version" \
     --slurpfile projectInputs "$work/inputs.json" \
+    --slurpfile projectJdks "$work/project-jdks.json" \
     --slurpfile described "$work/output/projects.json" \
     --slurpfile artifacts "$work/artifacts.json" \
     --arg distribution "$(tree_path "$url")" \
@@ -550,7 +555,8 @@ run_lock() {
       konanHost: $konanHost,
       projects: $described[0].projects,
       artifacts: $artifacts[0]
-    } | if ($projectInputs[0] | length) > 0 then . + {projectInputs: $projectInputs[0]} else . end' >"$work/lock.json"
+    } | if ($projectJdks[0] | length) > 0 then . + {projectJdks: $projectJdks[0]} else . end
+      | if ($projectInputs[0] | length) > 0 then . + {projectInputs: $projectInputs[0]} else . end' >"$work/lock.json"
   mkdir -p "$(dirname "$lockfile")"
   jq --arg contentHash "$(content_hash "$work/lock.json")" '.contentHash = $contentHash' \
     "$work/lock.json" >"$lockfile.tmp"
@@ -575,6 +581,16 @@ build_attr() {
   printf '%s' "$out" | tail -n 1
 }
 
+# Realize the same typed SDK closure used by the Nix builder.
+realise_sdk_context() {
+  sdk_context=$(build_attr sdkContext)
+  if jq -e 'type == "object"' "$sdk_context" >/dev/null; then
+    export GRADLE_PURIFIER_JDK_CONTEXT=$sdk_context
+  else
+    unset GRADLE_PURIFIER_JDK_CONTEXT
+  fi
+}
+
 prefetch_command() {
   local given=''
   while [ $# -gt 0 ]; do
@@ -595,6 +611,7 @@ prefetch_command() {
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
   distribution=$(build_attr distribution)
+  realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
     rm -rf "$state/provided" "$state/input-metadata"
@@ -622,6 +639,9 @@ prefetch_command() {
     echo "lockFile=$lockfile"
     echo "lockSha256=$(sha256sum "$lockfile" | cut -d ' ' -f 1)"
     echo "initScript=$lib/purifier.init.gradle"
+    if [ -n "${GRADLE_PURIFIER_JDK_CONTEXT:-}" ]; then
+      echo "gradle.purifier.jdk.context=$sdk_context"
+    fi
     echo "portal=file://$tree/$portal"
     echo "gradle.purifier.repository=file://$tree"
     if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
@@ -681,6 +701,7 @@ publish_command() {
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
   distribution=$(build_attr distribution)
+  realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
     rm -rf "$state/provided" "$state/input-metadata"
@@ -704,6 +725,7 @@ publish_command() {
   mapfile -t locked_args < <(jq -r '.gradleArguments[]' "$lockfile")
   JAVA_HOME=$(jdk_home "$jdk") \
     GRADLE_PURIFIER_MODE=publish \
+    GRADLE_PURIFIER_BUILD_ROOT=$root \
     GRADLE_PURIFIER_REPOSITORY=file://$tree \
     GRADLE_PURIFIER_ARTIFACTS=$artifacts \
     GRADLE_PURIFIER_PUBLICATION_REPOSITORY=$publication/repository \
@@ -711,6 +733,7 @@ publish_command() {
     exec "$distribution/bin/gradle" \
     --offline --no-configuration-cache \
     --init-script "$lib/purifier.init.gradle" \
+    --init-script "$lib/task-jdks.init.gradle" \
     "-Dorg.gradle.internal.plugins.portal.url.override=file://$tree/$portal" \
     "${locked_args[@]}" "${excluded[@]}" "$@"
 }
