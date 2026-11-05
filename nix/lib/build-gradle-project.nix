@@ -159,6 +159,9 @@ let
     fetcherArgs
     // {
       name = "gradle-purifier-repository";
+      # Gradle's Groovy runtime discovery canonicalizes jars before parsing
+      # their filenames. Store-object symlinks add a hash to that basename.
+      link = false;
       inherit entries;
     }
     // fetchers
@@ -360,6 +363,9 @@ let
         ''}
         ${lib.optionalString hasPublications ''
           cp -r "$built/maven" "$maven"
+          # A SNAPSHOT publish uses timestamped filenames. Preserve every
+          # artifact under its logical version before removing the clock data.
+          ${python3}/bin/python ${./normalize-publications.py} "$maven"
           # The version listings of a Maven repository hold the time of the
           # publication, which differs from one build to the next.
           find "$maven" -name 'maven-metadata*' -delete

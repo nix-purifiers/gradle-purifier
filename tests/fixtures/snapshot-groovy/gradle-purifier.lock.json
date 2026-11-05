@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "contentHash": "sha256:6a8fd9f59eb6fb6aa3ef56d1395ffe009b3dd384d4da056c24973e4e393f2051",
+  "inputsHash": "1e781c1d4575bae73b074ab27d22357862a3f51fb941434308dc55b3018f278d",
+  "gradleArguments": [],
+  "javaMajor": 21,
+  "distribution": "https/services.gradle.org/distributions/gradle-8.14-bin.zip",
+  "rootProjectName": "snapshot-groovy",
+  "konanHost": null,
+  "projects": [
+    {
+      "path": ":",
+      "publications": [
+        {
+          "name": "maven",
+          "groupId": "example",
+          "artifactId": "snapshot-groovy",
+          "artifacts": [
+            {
+              "classifier": null,
+              "extension": "jar"
+            },
+            {
+              "classifier": "sources",
+              "extension": "jar"
+            }
+          ]
+        }
+      ],
+      "application": null,
+      "executables": [],
+      "archives": [
+        "snapshot-groovy-sources.jar",
+        "snapshot-groovy.jar"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "url": "https://repo.maven.apache.org/maven2/junit/junit/4.13.2/junit-4.13.2-javadoc.jar",
+      "hash": "sha256-lge+B0sCAM549USlLsrlRLG6VZ9DC6W2xP8RDjDbC4w="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/junit/junit/4.13.2/junit-4.13.2-sources.jar",
+      "hash": "sha256-NBgd9kgtQOpMBGsGPLU8f/rpS98bHWJpW986353qfjo="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/junit/junit/4.13.2/junit-4.13.2.jar",
+      "hash": "sha256-jklbY0Rp1k+4rPo0laBly6zIoP/1XOHjEAe+TBbcV9M="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/junit/junit/4.13.2/junit-4.13.2.pom",
+      "hash": "sha256-Vptpd+5GA8llwcRsMFj6bpaSkbAWDraWTdCSzYnq3ZQ="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/codehaus/groovy/groovy-all/2.4.21/groovy-all-2.4.21-javadoc.jar",
+      "hash": "sha256-sAOXa7iNTpAGmP2F3BgxE1uTFTlAfr0ZXx7MBSlLN1M="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/codehaus/groovy/groovy-all/2.4.21/groovy-all-2.4.21-sources.jar",
+      "hash": "sha256-KsExMqXBXuyJXMToxZ5V8PfIG80Nlt0NNOAjwQFmfnI="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/codehaus/groovy/groovy-all/2.4.21/groovy-all-2.4.21.jar",
+      "hash": "sha256-3mUmDPIHBELpmILy89cudTFyXB5qJXRGzAzqUlxge9A="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/codehaus/groovy/groovy-all/2.4.21/groovy-all-2.4.21.pom",
+      "hash": "sha256-OzG7KM3KXz0YShXbXij3/ky5bXfBVNPK5uSgrhBwQpQ="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3-javadoc.jar",
+      "hash": "sha256-J/cyeu6HMklS2iQFsCCU30Ck53K0ja5+QZ2LUAZ8p0U="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3-sources.jar",
+      "hash": "sha256-4iPS2Puv1mBXqISMyUIi1jw87dZSzEjt3Aq1w5wPhN8="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar",
+      "hash": "sha256-Zv3vkelzk0jfeglqo4SlaF9Oh1WEzOiThqekclHE2Ok="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.pom",
+      "hash": "sha256-/eOGp5BRc6GxA95quCBydYS1DQ4yKC4nl3h8IKZP+pM="
+    },
+    {
+      "url": "https://repo.maven.apache.org/maven2/org/hamcrest/hamcrest-parent/1.3/hamcrest-parent-1.3.pom",
+      "hash": "sha256-bVNflO+2Y722gsnyelAzU5RogAlkK6epZ3UEvBvkEps="
+    },
+    {
+      "url": "https://services.gradle.org/distributions/gradle-8.14-bin.zip",
+      "hash": "sha256-Ya0xDTx9Pl2hMbdrvyK1pMB4bp2JLa6MFljUtITePKo="
+    }
+  ]
+}
