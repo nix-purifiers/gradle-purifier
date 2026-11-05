@@ -92,7 +92,16 @@ let
       "javadoc"
     ]
     && isIdentityHash (role.sdk or null)
-    && role.provenance or null == "resolved-selected-provider";
+    && (
+      role.provenance or null == "resolved-selected-provider"
+      || (
+        role.provenance or null == "configured-native-executable"
+        && builtins.elem role.role [
+          "compiler"
+          "launcher"
+        ]
+      )
+    );
   isSdkContext =
     context:
     isAttrs context

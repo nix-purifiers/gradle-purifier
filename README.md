@@ -240,6 +240,14 @@ typed custom SDK inputs in CLI capture remain outside this first implementation.
 additional-SDK capture covers root-build roles; a nested build requesting a
 non-manager SDK fails explicitly. It does not claim complete custom-task coverage.
 
+When a native task has no typed SDK provider, an explicitly configured compiler
+or runtime executable can identify its SDK. The lock records this as
+`configured-native-executable` for compiler/launcher roles and still reconstructs
+the exact pinned Nix SDK output. Mutable aliases, same-version replacement outputs
+and conflicts between a provider and explicit executable fail. An absent provider
+without an explicit executable remains an error, including disabled tasks whose
+runtime selection is unknown. This adapter does not certify a legacy version range.
+
 Existing manager-only lockfiles retain their format and byte identity. Their
 missing SDK field does not authorize a foreign SDK: replay detects that use and
 requests a relock. Additional explicit `toolchainJdks` remain available in the

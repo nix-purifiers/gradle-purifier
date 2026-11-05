@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           nix build .#default --out-link "$RUNNER_TEMP/gradle-sdk-candidate"
-          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk21_headless' --no-link
+          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk17_headless' 'nixpkgs#jdk21_headless' --no-link
           nix build 'github:nix-purifiers/gradle-purifier/f7ec9a358e25567231b58100d196c40557a6d638#default' \
             --out-link "$RUNNER_TEMP/gradle-sdk-baseline"
           python - <<'PYTHON'
@@ -175,6 +175,21 @@ jobs:
             --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
             --project "$RUNNER_TEMP/gradle-sdk-proof/lifecycle/split" \
             --output "$RUNNER_TEMP/gradle-sdk-proof/negative"
+      - name: Validate explicit native SDK selection without provider metadata
+        run: |
+          # The SDK home interpolation below belongs to Nix.
+          # shellcheck disable=SC2016
+          nix eval --impure --json --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+                describe = j: { path = toString j; home = j.home or "${j}/lib/openjdk"; version = j.version; };
+            in { java8 = describe p.jdk8_headless; java17 = describe p.jdk17_headless; }
+          ' > "$RUNNER_TEMP/gradle-sdk-proof/explicit-sdks.json"
+          python tests/sdk-closure/explicit-native.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
+            --cache "$RUNNER_TEMP/gradle-sdk-distributions" \
+            --sdks "$RUNNER_TEMP/gradle-sdk-proof/explicit-sdks.json" \
+            --output "$RUNNER_TEMP/gradle-sdk-proof/explicit-native"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -189,6 +204,10 @@ jobs:
             ${{ runner.temp }}/gradle-sdk-proof/lifecycle/*.log
             ${{ runner.temp }}/gradle-sdk-proof/negative/*.json
             ${{ runner.temp }}/gradle-sdk-proof/negative/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/explicit-sdks.json
+            ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*.json
+            ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*/*.log
+            ${{ runner.temp }}/gradle-sdk-proof/explicit-native/*/output/*.json
 
   javadoc-link-metadata:
     runs-on: ubuntu-latest

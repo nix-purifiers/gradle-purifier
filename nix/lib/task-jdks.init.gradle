@@ -41,22 +41,36 @@ def inspectSelection = { task ->
             throw new GradleException("gradle-purifier: ${task.path} selects a non-manager SDK absent from this lock; run 'gradle-purifier lock --relock -- ${task.path}'")
         }
     }
-    def provider = task.property(providerName)
-    if (!provider.present) throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
-    def tool = provider.get()
-    def providerHome = tool.metadata.installationPath.asFile
-    def executable = tool.executablePath.asFile
+    def explicit = null
     if (task instanceof JavaCompile && task.options.fork) {
-        if (task.options.forkOptions.executable) executable = new File(task.options.forkOptions.executable)
-        else if (task.options.forkOptions.javaHome) executable = new File(task.options.forkOptions.javaHome, 'bin/javac')
-    } else if ((task instanceof Test || task instanceof JavaExec || task instanceof Javadoc) && task.executable) {
-        executable = new File(task.executable)
+        if (task.options.forkOptions.executable) explicit = new File(task.options.forkOptions.executable)
+        else if (task.options.forkOptions.javaHome) explicit = new File(task.options.forkOptions.javaHome, 'bin/javac')
+    } else if ((task instanceof Test || task instanceof JavaExec) && task.executable) {
+        explicit = new File(task.executable)
     }
+    def provider = task.property(providerName)
+    def tool = provider.present ? provider.get() : null
+    if (tool == null && explicit == null) {
+        throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
+    }
+    def executable = explicit ?: tool.executablePath.asFile
+    // Preserve existing provider-based Javadoc selection; no absent-provider
+    // Javadoc fallback is introduced by the executable adapter.
+    if (task instanceof Javadoc && task.executable) executable = new File(task.executable)
     def home = executable.absoluteFile.parentFile.parentFile
+    if (tool != null && explicit != null && home.canonicalPath != tool.metadata.installationPath.asFile.canonicalPath) {
+        throw new GradleException("gradle-purifier: ${task.path} selects conflicting provider and explicit SDKs; select one immutable SDK and relock")
+    }
     // Retain lexical paths too: canonicalizing an ambient alias must not bless it.
-    [task: task.path, role: role, home: home.absolutePath, canonicalHome: home.canonicalPath,
-        executable: executable.absolutePath, canonicalExecutable: executable.canonicalPath,
-        providerHome: providerHome.absolutePath, providerMajor: tool.metadata.languageVersion.toString()]
+    def row = [task: task.path, role: role, home: home.absolutePath, canonicalHome: home.canonicalPath,
+        executable: executable.absolutePath, canonicalExecutable: executable.canonicalPath]
+    if (tool != null) {
+        row.providerHome = tool.metadata.installationPath.asFile.absolutePath
+        row.providerMajor = tool.metadata.languageVersion.toString()
+    } else {
+        row.selectionProvenance = 'configured-native-executable'
+    }
+    row
 }
 def select = { task ->
     try { inspectSelection(task) }
@@ -76,6 +90,9 @@ def check = { row ->
     if (matches.size() > 1) throw new GradleException("gradle-purifier: ambiguous SDK task role ${row.task}/${row.role}; run 'gradle-purifier lock --relock -- ${row.task}'")
     def recorded = matches ? matches[0] : null
     if (!recorded) throw new GradleException("gradle-purifier: SDK role ${row.task}/${row.role} was not selected by the lock; run 'gradle-purifier lock --relock -- ${row.task}'")
+    if ((row.selectionProvenance ?: 'resolved-selected-provider') != recorded.provenance) {
+        throw new GradleException("gradle-purifier: ${row.task} changed its SDK selection provenance; run 'gradle-purifier lock --relock'")
+    }
     if (row.home != row.canonicalHome || row.home != recorded.home || row.executable != row.canonicalExecutable) {
         throw new GradleException("gradle-purifier: ${row.task} selected an SDK that differs from its immutable lock; select the recorded Nix SDK and run 'gradle-purifier lock --relock -- ${row.task}'")
     }
