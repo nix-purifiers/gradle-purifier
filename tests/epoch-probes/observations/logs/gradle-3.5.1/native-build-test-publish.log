@@ -1,0 +1,21 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-3.5.1/bin/gradle", "--no-daemon", "clean", "check", "uploadArchives"]
+The executable property on ForkOptions has been deprecated and is scheduled to be removed in Gradle 5.0. Please use javaHome instead.
+	at build_5gzooph7zsdmk7lq77685euzl.run(/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-g6ok83qo/native/build.gradle:7)
+:clean UP-TO-DATE
+:compileJava
+:processResources NO-SOURCE
+:classes
+:compileTestJava
+:processTestResources NO-SOURCE
+:testClasses
+:epochTest
+EPOCH TEST PASSED
+:test SKIPPED
+:check
+:jar
+:uploadArchivesCould not find metadata example:epoch/maven-metadata.xml in remote (file:/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-g6ok83qo/native/repository)
+
+
+BUILD SUCCESSFUL
+
+Total time: 1.634 secs

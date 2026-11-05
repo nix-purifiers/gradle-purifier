@@ -1,0 +1,51 @@
+["nix", "build", "--impure", "--no-link", "--print-build-logs", "--expr", "let\n                          f = builtins.getFlake (\"path:\" + builtins.getEnv \"EPOCH_SOURCE\");\n                          p = import f.inputs.nixpkgs { system = builtins.currentSystem; overlays = [ f.overlays.default ]; };\n                          sdks = import (/. + builtins.getEnv \"EPOCH_SDK_FILE\") { pkgs = p; };\n                        in (p.gradle-purifier.buildGradleProject {\n                          src = /. + builtins.getEnv \"EPOCH_PROJECT\";\n                          toolchainJdks = [ sdks.${builtins.getEnv \"EPOCH_COMPILER\"} ];\n                        }).tests"]
+this derivation will be built:
+  /nix/store/h39sp2hqmdq26lz1r6512w0lns9vmak4-epoch-tests.drv
+building '/nix/store/h39sp2hqmdq26lz1r6512w0lns9vmak4-epoch-tests.drv'...
+epoch-tests> Running phase: unpackPhase
+epoch-tests> unpacking source archive /nix/store/yz6r7rg32rdddii1vbjvgbaqzmx5s5hf-gradle-source
+epoch-tests> source root is gradle-source
+epoch-tests> Running phase: patchPhase
+epoch-tests> Running phase: updateAutotoolsGnuConfigScriptsPhase
+epoch-tests> Running phase: buildPhase
+epoch-tests> 
+epoch-tests> Welcome to Gradle 9.9.0-rc-1!
+epoch-tests> 
+epoch-tests> Here are the highlights of this release:
+epoch-tests>  - Performance improvements for Kotlin DSL compilation
+epoch-tests>  - Test filtering for non-method JUnit Platform tests
+epoch-tests>  - Wrapper settings preserved on upgrade
+epoch-tests>  - Predefined groups in the Problems API
+epoch-tests> 
+epoch-tests> For more details see https://docs.gradle.org/9.9.0-rc-1/release-notes.html
+epoch-tests> 
+epoch-tests> To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.9.0-rc-1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+epoch-tests> Daemon will be stopped at the end of the build
+epoch-tests> > Task :compileJava
+epoch-tests> > Task :processResources NO-SOURCE
+epoch-tests> > Task :classes
+epoch-tests> > Task :compileTestJava
+epoch-tests> > Task :processTestResources NO-SOURCE
+epoch-tests> > Task :testClasses
+epoch-tests> 
+epoch-tests> > Task :epochTest
+epoch-tests> EPOCH TEST PASSED
+epoch-tests> 
+epoch-tests> > Task :test SKIPPED
+epoch-tests> > Task :check
+epoch-tests> 
+epoch-tests> [Incubating] Problems report is available at: file:///build/gradle-source/build/reports/problems/problems-report.html
+epoch-tests> 
+epoch-tests> Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+epoch-tests> 
+epoch-tests> You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+epoch-tests> 
+epoch-tests> For more on this, please refer to https://docs.gradle.org/9.9.0-rc-1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+epoch-tests> 
+epoch-tests> BUILD SUCCESSFUL in 3s
+epoch-tests> 3 actionable tasks: 3 executed
+epoch-tests> Running phase: installPhase
+epoch-tests> Running phase: fixupPhase
+epoch-tests> shrinking RPATHs of ELF executables and libraries in /nix/store/p6sw4zjj348nbwaqy640sgpn3xksyzv2-epoch-tests
+epoch-tests> checking for references to /build/ in /nix/store/p6sw4zjj348nbwaqy640sgpn3xksyzv2-epoch-tests...
+epoch-tests> patching script interpreter paths in /nix/store/p6sw4zjj348nbwaqy640sgpn3xksyzv2-epoch-tests

@@ -1,0 +1,15 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-0.7/bin/gradle", "clean", "check", "uploadArchives"]
+:clean
+:compile
+:compileTests
+:epochTest
+:check
+:processResources
+:processTestResources
+:test SKIPPED
+:jar
+:uploadArchives
+
+BUILD SUCCESSFUL
+
+Total time: 1.17 secs

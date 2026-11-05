@@ -1,0 +1,21 @@
+["/nix/store/ns373g90py9jjpd8zvdrmfs49kg88h5z-agent-sandbox-base/bin/bash", "/home/chris/Projects/ch-nix-workspace/.worktrees/purifier-toolchains/evidence/gradle-distributions/gradle-1.12/bin/gradle", "--no-daemon", "clean", "check", "uploadArchives"]
+:clean UP-TO-DATE
+:compileJava
+:processResources UP-TO-DATE
+:classes
+:compileTestJava
+:processTestResources UP-TO-DATE
+:testClasses
+:epochTest
+EPOCH TEST PASSED
+:test SKIPPED
+:check
+:jar
+:uploadArchivesUploading: example/epoch/1.0/epoch-1.0.jar to repository remote at file:/run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-4mkpstva/native/repository
+Transferring 1K from remote
+Uploaded 1K
+
+
+BUILD SUCCESSFUL
+
+Total time: 1.904 secs

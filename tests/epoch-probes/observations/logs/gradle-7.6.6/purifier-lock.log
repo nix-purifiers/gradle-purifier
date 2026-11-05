@@ -1,0 +1,77 @@
+["/nix/store/2p1d1z2isp7qwmjjp1xcc15ciinqa6nd-gradle-purifier/bin/gradle-purifier", "lock"]
+gradle-purifier: fetching https://services.gradle.org/distributions/gradle-7.6.6-bin.zip
+gradle-purifier: running the lock build in /run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-cws_stii/capture/.gradle-purifier/lock-run/build
+
+Welcome to Gradle 7.6.6!
+
+Here are the highlights of this release:
+ - Added support for Java 19.
+ - Introduced `--rerun` flag for individual task rerun.
+ - Improved dependency block for test suites to be strongly typed.
+ - Added a pluggable system for Java toolchains provisioning.
+
+For more details see https://docs.gradle.org/7.6.6/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. See https://docs.gradle.org/7.6.6/userguide/gradle_daemon.html#sec:disabling_the_daemon.
+Daemon will be stopped at the end of the build 
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle' line: 55
+
+* What went wrong:
+Could not compile initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle'.
+> startup failed:
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 55: unable to resolve class org.gradle.api.flow.FlowAction 
+   @ line 55, column 1.
+     abstract class PurifierMissingHint implements org.gradle.api.flow.FlowAction<Parameters> {
+     ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 55: unable to resolve class org.gradle.api.flow.FlowAction <Parameters>
+   @ line 55, column 1.
+     abstract class PurifierMissingHint implements org.gradle.api.flow.FlowAction<Parameters> {
+     ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 56: unable to resolve class org.gradle.api.flow.FlowParameters 
+   @ line 56, column 5.
+         interface Parameters extends org.gradle.api.flow.FlowParameters {
+         ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 56: unable to resolve class org.gradle.api.flow.FlowParameters
+   @ line 56, column 5.
+         interface Parameters extends org.gradle.api.flow.FlowParameters {
+         ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 92: unable to resolve class org.gradle.api.flow.FlowScope 
+   @ line 92, column 5.
+         @javax.inject.Inject
+         ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 92: unable to resolve class org.gradle.api.flow.FlowScope
+   @ line 92, column 5.
+         @javax.inject.Inject
+         ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 95: unable to resolve class org.gradle.api.flow.FlowProviders 
+   @ line 95, column 5.
+         @javax.inject.Inject
+         ^
+  
+  initialization script '/nix/store/qf84s7h0cwzm4nx4k4rnq9bgk6wd16c3-lib/purifier.init.gradle': 95: unable to resolve class org.gradle.api.flow.FlowProviders
+   @ line 95, column 5.
+         @javax.inject.Inject
+         ^
+  
+  8 errors
+
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org
+
+BUILD FAILED in 2s
+gradle-purifier: the lock build failed (Gradle names the cause above)

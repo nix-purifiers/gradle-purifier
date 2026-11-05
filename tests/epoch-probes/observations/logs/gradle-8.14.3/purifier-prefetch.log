@@ -1,0 +1,2 @@
+["/nix/store/2p1d1z2isp7qwmjjp1xcc15ciinqa6nd-gradle-purifier/bin/gradle-purifier", "prefetch"]
+gradle-purifier: prefetched /run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-3cz04e3z/capture/gradle-purifier.lock.json. ./gradlew, a Gradle on the PATH and an IDE now build /run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-3cz04e3z/capture from the locked downloads, offline; the init script is /run/user/60432/agent-sandbox/run-3202179/tmp/gradle-epoch-3cz04e3z/gradle-home/init.d/gradle-purifier.gradle. Run 'gradle-purifier prefetch' again after each lock.
