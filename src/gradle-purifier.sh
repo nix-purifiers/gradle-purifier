@@ -488,6 +488,15 @@ run_lock() {
     || die "could not select native Gradle controls"
   mapfile -t gradle_flags <"$work/gradle-flags.txt"
 
+  # Read the unpacked native distribution's version, not its URL's filename.
+  GRADLE_PURIFIER_MODE='' JAVA_HOME=$java GRADLE_USER_HOME=$work/gradle-home \
+    "$gradle_home/bin/gradle" --version >"$work/gradle-version.txt" \
+    || die "could not read the native Gradle version"
+  local native_gradle_version
+  native_gradle_version=$(sed -n 's/^Gradle //p' "$work/gradle-version.txt")
+  [[ $native_gradle_version =~ ^[0-9][0-9A-Za-z.+_-]*$ ]] \
+    || die "the native distribution did not return one recognizable Gradle version"
+
   echo "gradle-purifier: running the lock build in $work/build" >&2
   local legacy_bindings='[]' legacy_metadata_capture=0
   if [ -f "$lockfile" ]; then
@@ -496,6 +505,13 @@ run_lock() {
   fi
   if [ ! -f "$lockfile" ] || [ "${relock:-}" = 1 ]; then
     legacy_metadata_capture=1
+  fi
+  if [ "$native_gradle_version" = 5.6.4 ]; then
+    # readLock identifies this exact basic profile from the locked distribution.
+    # A renamed archive must not give the builder a different profile identity.
+    [ "${url##*/}" = gradle-5.6.4-bin.zip ] \
+      || die "the native Gradle5.6.4 basic profile requires its matching gradle-5.6.4-bin.zip distribution identity"
+    legacy_metadata_capture=0
   fi
   if ! (
     cd "$work/build" || exit 1

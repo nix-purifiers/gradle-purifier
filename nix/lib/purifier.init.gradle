@@ -528,7 +528,7 @@ allprojects { project ->
             if (!gradle.ext.has('purifierLegacyMaven')) {
                 gradle.ext.purifierLegacyMaven = [mode: mode, output: output,
                     bindings: legacyBindings,
-                    captureMetadata: !legacy56 && System.getenv('GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE') == '1',
+                    captureMetadata: System.getenv('GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE') == '1',
                     repository: setting('GRADLE_PURIFIER_PUBLICATION_REPOSITORY'), catalog: setting('GRADLE_PURIFIER_PUBLICATION_CATALOG'),
                     artifacts: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_ARTIFACTS') ?: '{}')]
                 apply from: new File(purifierScriptDirectory, 'legacy-maven.init.gradle')
