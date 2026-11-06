@@ -19,6 +19,13 @@ gradle.taskGraph.whenReady { graph -> new File(System.getenv('GUARD_GRAPH')).tex
 getter="uploadArchives.repositories.withType(org.gradle.api.artifacts.maven.MavenDeployer).toList()[0]"
 cases={
  'valid':('',None),
+ 'helper-configuration-action':("configurations.all { c -> if(c.name=='purifierLegacyInputArtifacts1') purifierLegacyDeployInput1.doFirst { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
+ 'owner-configuration-action':("configurations.all { c -> if(c.name=='purifierLegacyArtifacts') uploadArchives.doFirst { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
+ 'helper-configuration-dependency':("task unexpected;configurations.all { c -> if(c.name=='purifierLegacyInputArtifacts1') purifierLegacyDeployInput1.dependsOn { file('HOOK_EXECUTED').text='bad';unexpected } }",'custom Upload dependencies'),
+ 'owner-late-action-method':("gradle.taskGraph.whenReady { def a=uploadArchives.actions.find { it.getClass().name=='org.gradle.api.internal.project.taskfactory.StandardTaskAction' };def f=a.getClass().getDeclaredField('method');f.accessible=true;f.set(a,org.gradle.api.tasks.Upload.getDeclaredMethod('isUploadDescriptor')) }",'unsupported native Upload action binding'),
+ 'helper-late-action-method':("gradle.taskGraph.whenReady { def a=purifierLegacyDeployInput1.actions.find { it.getClass().name=='org.gradle.api.internal.project.taskfactory.StandardTaskAction' };def f=a.getClass().getDeclaredField('method');f.accessible=true;f.set(a,org.gradle.api.tasks.Upload.getDeclaredMethod('isUploadDescriptor')) }",'unsupported native Upload action binding'),
+ 'owner-late-warning-delegate':("gradle.taskGraph.whenReady { def a=uploadArchives.actions.find { it.getClass().name=='org.gradle.api.internal.AbstractTask$TaskActionWrapper' };def f=a.getClass().getDeclaredField('action');f.accessible=true;f.set(a,{ t -> file('HOOK_EXECUTED').text='bad' } as org.gradle.api.Action) }",'custom Upload warning action'),
+
  'helper-early-first':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.doFirst { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
  'helper-early-last':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.doLast { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
  'helper-early-dependency':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.dependsOn unexpected }",'custom Upload dependencies'),
