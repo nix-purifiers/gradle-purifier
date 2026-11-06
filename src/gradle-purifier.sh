@@ -725,6 +725,14 @@ publish_command() {
   [ -f "$lockfile" ] || die "the build has no $lockfile; run 'gradle-purifier lock'"
   local release tree jdk distribution publication
   release=$(build_attr release)
+  # Gradle5.6 basic locks deliberately have no strict native metadata capability.
+  # Reject before projection construction, including archive-only old locks.
+  case "$(jq -r '.distribution' "$lockfile")" in
+    */gradle-5.6.4-bin.zip|gradle-5.6.4-bin.zip)
+      python3 "$lib/validate-legacy-native-metadata.py" --release-lock "$release" "$lockfile" \
+        || die "Gradle5.6.4 strict legacy Maven publish is unsupported"
+      ;;
+  esac
   # Building release validates the lock before this publication check. Old
   # archive-only locks remain buildable and opt into publication by relocking.
   if ! jq -e '[.projects[].publications[]] | length > 0' "$lockfile" >/dev/null; then

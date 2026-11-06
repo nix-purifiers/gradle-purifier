@@ -41,7 +41,7 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
-import org.gradle.api.artifacts.repositories.UrlArtifactRepository
+import org.gradle.api.artifacts.repositories.IvyArtifactRepository
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
@@ -62,6 +62,10 @@ if (mode == null || mode.isEmpty()) {
 if (!(mode in ['lock', 'sandbox', 'interactive', 'publish'])) {
     throw new GradleException("gradle-purifier: GRADLE_PURIFIER_MODE is '${mode}'; it must be lock, sandbox, interactive or publish")
 }
+
+def legacy56 = gradle.gradleVersion == '5.6.4'
+if (legacy56) apply from: new File(buildscript.sourceFile.parentFile, 'legacy-settings-5.6.init.gradle')
+def urlRepositoryType = legacy56 ? null : Class.forName('org.gradle.api.artifacts.repositories.UrlArtifactRepository', false, getClass().classLoader)
 
 // A package build gives the same files each time: archives hold their
 // entries in a fixed order and without the times of the files, which
@@ -404,12 +408,12 @@ def standIn = { URI uri ->
 }
 
 def purify = { repository ->
-    if (repository instanceof UrlArtifactRepository) {
+    if (legacy56 ? (repository instanceof MavenArtifactRepository || repository instanceof IvyArtifactRepository) : urlRepositoryType.isInstance(repository)) {
         def replaced = standIn(repository.url)
         if (replaced != null) {
             repository.url = replaced
             // The recorder serves plain HTTP on the loopback address.
-            if (replaced.scheme == 'http') {
+            if (replaced.scheme == 'http' && !legacy56) {
                 repository.allowInsecureProtocol = true
             }
         }
@@ -467,19 +471,33 @@ def idOf = { project ->
 }
 
 def failOnProjectRepositories = false
-settingsEvaluated { settings ->
-    failOnProjectRepositories = settings.dependencyResolutionManagement.repositoriesMode.get().name() == 'FAIL_ON_PROJECT_REPOS'
-}
-beforeSettings { settings ->
-    addProvidedRepository(settings.pluginManagement.repositories)
-    addProvidedRepository(settings.buildscript.repositories)
-    addProvidedRepository(settings.dependencyResolutionManagement.repositories)
-    settings.pluginManagement.repositories.all(purify)
-    settings.buildscript.repositories.all(purify)
-    settings.dependencyResolutionManagement.repositories.all(purify)
+if (legacy56) {
+    // This is later than beforeSettings: settings code needing remote resolution
+    // was rejected by the declarative settings validator above.
+    settingsEvaluated { settings ->
+        addProvidedRepository(settings.pluginManagement.repositories)
+        addProvidedRepository(settings.buildscript.repositories)
+        settings.pluginManagement.repositories.all(purify)
+        settings.buildscript.repositories.all(purify)
+    }
+} else {
+    settingsEvaluated { settings ->
+        failOnProjectRepositories = settings.dependencyResolutionManagement.repositoriesMode.get().name() == 'FAIL_ON_PROJECT_REPOS'
+    }
+    beforeSettings { settings ->
+        addProvidedRepository(settings.pluginManagement.repositories)
+        addProvidedRepository(settings.buildscript.repositories)
+        addProvidedRepository(settings.dependencyResolutionManagement.repositories)
+        settings.pluginManagement.repositories.all(purify)
+        settings.buildscript.repositories.all(purify)
+        settings.dependencyResolutionManagement.repositories.all(purify)
+    }
 }
 
 allprojects { project ->
+    if (legacy56) project.plugins.withId('maven-publish') {
+        throw new GradleException('gradle-purifier: Gradle5.6.4 maven-publish metadata is unsupported; this profile supports basic legacy maven Upload only')
+    }
     if (!provided.isEmpty()) {
         addProvidedRepository(project.buildscript.repositories)
         if (!failOnProjectRepositories) {
@@ -510,7 +528,7 @@ allprojects { project ->
             if (!gradle.ext.has('purifierLegacyMaven')) {
                 gradle.ext.purifierLegacyMaven = [mode: mode, output: output,
                     bindings: legacyBindings,
-                    captureMetadata: System.getenv('GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE') == '1',
+                    captureMetadata: !legacy56 && System.getenv('GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE') == '1',
                     repository: setting('GRADLE_PURIFIER_PUBLICATION_REPOSITORY'), catalog: setting('GRADLE_PURIFIER_PUBLICATION_CATALOG'),
                     artifacts: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_ARTIFACTS') ?: '{}')]
                 apply from: new File(purifierScriptDirectory, 'legacy-maven.init.gradle')

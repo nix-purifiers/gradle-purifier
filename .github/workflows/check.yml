@@ -433,6 +433,87 @@ jobs:
             ${{ runner.temp }}/gradle-replay-proof/modern/gradle-consumer/build.gradle
             ${{ runner.temp }}/gradle-replay-proof/modern/maven-consumer/pom.xml
 
+  legacy-basic-56:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Prepare bounded Gradle5.6 proof
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-56-proof" "$RUNNER_TEMP/gradle-56-distributions"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-56-proof/source-revision"
+          python - <<'PYTHON'
+          from pathlib import Path
+          import hashlib,json,os,subprocess
+          files=subprocess.check_output(['git','ls-files'],text=True).splitlines()
+          Path(os.environ['RUNNER_TEMP'],'gradle-56-proof/source-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files if Path(p).is_file()},indent=2))
+          PYTHON
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-56-candidate"
+          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk11_headless' --no-link
+          nix eval --impure --json --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+                describe = j: { path = toString j; home = j.home or "${j}/lib/openjdk"; version = j.version; };
+            in { java8 = describe p.jdk8_headless; java11 = describe p.jdk11_headless; }
+          ' > "$RUNNER_TEMP/gradle-56-proof/sdks.json"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Declarative settings before native evaluation
+        run: |
+          python tests/legacy-maven/settings-56.py \
+            --sdks "$RUNNER_TEMP/gradle-56-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-56-distributions" --output "$RUNNER_TEMP/gradle-56-proof/settings"
+      - name: Basic and selected SDK cold replay and strict rejections
+        run: |
+          for scenario in basic sdk; do
+            args=()
+            if [ "$scenario" = sdk ]; then args+=(--sdk); fi
+            python tests/legacy-maven/basic-56.py "${args[@]}" \
+              --cli "$RUNNER_TEMP/gradle-56-candidate/bin/gradle-purifier" \
+              --sdks "$RUNNER_TEMP/gradle-56-proof/sdks.json" \
+              --cache "$RUNNER_TEMP/gradle-56-distributions" --output "$RUNNER_TEMP/gradle-56-proof/$scenario"
+          done
+      - name: Native task, metadata, SDK and old-lock strict guards
+        run: |
+          python tests/legacy-maven/guards-56.py \
+            --cli "$RUNNER_TEMP/gradle-56-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-56-proof/sdks.json" \
+            --project "$RUNNER_TEMP/gradle-56-proof/basic/producer" \
+            --cache "$RUNNER_TEMP/gradle-56-distributions" --output "$RUNNER_TEMP/gradle-56-proof/guards"
+      - name: Native project plugin with stopped origin
+        run: |
+          python tests/legacy-maven/plugin-56.py \
+            --cli "$RUNNER_TEMP/gradle-56-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-56-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-56-distributions" --output "$RUNNER_TEMP/gradle-56-proof/plugin"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-legacy-basic-56
+          path: |
+            ${{ runner.temp }}/gradle-56-proof/source-*.json
+            ${{ runner.temp }}/gradle-56-proof/source-revision
+            ${{ runner.temp }}/gradle-56-proof/sdks.json
+            ${{ runner.temp }}/gradle-56-proof/**/*.log
+            ${{ runner.temp }}/gradle-56-proof/**/report.json
+            ${{ runner.temp }}/gradle-56-proof/**/schema-report.json
+            ${{ runner.temp }}/gradle-56-proof/**/context.json
+            ${{ runner.temp }}/gradle-56-proof/**/source-context.json
+            ${{ runner.temp }}/gradle-56-proof/**/*selection.json
+            ${{ runner.temp }}/gradle-56-proof/**/*native-counter.json
+            ${{ runner.temp }}/gradle-56-proof/**/gradle-purifier.lock.json
+            ${{ runner.temp }}/gradle-56-proof/**/task-sdks.json
+            ${{ runner.temp }}/gradle-56-proof/**/task-sdk-observations.json
+            ${{ runner.temp }}/gradle-56-proof/**/producer/src/**
+            ${{ runner.temp }}/gradle-56-proof/**/producer/build.gradle
+            ${{ runner.temp }}/gradle-56-proof/**/producer/settings.gradle
+            ${{ runner.temp }}/gradle-56-proof/**/repository/**
+            ${{ runner.temp }}/gradle-56-proof/**/lock-run/output/**
+
   legacy-maven:
     runs-on: ubuntu-latest
     timeout-minutes: 40

@@ -9,6 +9,7 @@ import org.gradle.api.tasks.javadoc.Javadoc
 
 def mode = System.getenv('GRADLE_PURIFIER_MODE') ?: System.getProperty('gradle.purifier.mode')
 if (!mode) return
+def legacy56 = gradle.gradleVersion == '5.6.4'
 def contextPath = System.getenv('GRADLE_PURIFIER_JDK_CONTEXT') ?: System.getProperty('gradle.purifier.jdk.context')
 def expected = contextPath ? new JsonSlurper().parse(new File(contextPath)) : null
 if (expected) {
@@ -28,6 +29,8 @@ def rows = []
 def observations = Collections.synchronizedMap([:])
 def captureOutput = System.getenv('GRADLE_PURIFIER_OUTPUT')
 def roleOf = { task ->
+    // A disabled old Test task establishes no runtime selection or execution.
+    if (legacy56 && task instanceof Test && !task.enabled) return null
     task instanceof JavaCompile ? 'compiler' : task instanceof Javadoc ? 'javadoc' :
         (task instanceof Test || task instanceof JavaExec) ? 'launcher' : null
 }
@@ -91,11 +94,11 @@ def nativeTestExecutable = { task ->
         }
         type = type.superclass
     }
-    def before = [task.javaLauncher.present, task.executable]
+    def before = legacy56 ? [task.executable] : [task.javaLauncher.present, task.executable]
     def values = []
     def target = nativeForkOptionsTarget(forkInterface, values)
     task.copyTo(target)
-    if ([task.javaLauncher.present, task.executable] != before) {
+    if ((legacy56 ? [task.executable] : [task.javaLauncher.present, task.executable]) != before) {
         throw new GradleException('gradle-purifier: native Test fork-options copy changed task SDK configuration')
     }
     validateNativeTestExecutable(values)
@@ -108,6 +111,13 @@ def sameSelection = { selected, current ->
 def inspectSelection = { task ->
     def role = roleOf(task)
     if (!role) return null
+    if (legacy56 && task instanceof JavaCompile) {
+        if (!task.options.fork || !(task.options.forkOptions.executable || task.options.forkOptions.javaHome))
+            throw new GradleException('gradle-purifier: Gradle5.6.4 compiler requires an explicit forked immutable SDK')
+        if (task.options.forkOptions.executable && task.options.forkOptions.javaHome &&
+            new File(task.options.forkOptions.executable).canonicalFile.parentFile.parentFile != task.options.forkOptions.javaHome.canonicalFile)
+            throw new GradleException('gradle-purifier: Gradle5.6.4 compiler executable and javaHome select conflicting SDKs')
+    }
     def providerName = role == 'compiler' ? 'javaCompiler' : role == 'javadoc' ? 'javadocTool' : 'javaLauncher'
     if (mode != 'lock' && !expected && task instanceof JavaCompile && task.options.fork && task.options.forkOptions.executable) {
         def requestedHome = new File(task.options.forkOptions.executable).absoluteFile.parentFile.parentFile
@@ -122,9 +132,10 @@ def inspectSelection = { task ->
     } else if ((task instanceof Test || task instanceof JavaExec) && task.executable) {
         explicit = new File(task.executable)
     }
-    def provider = task.property(providerName)
-    def tool = provider.present ? provider.get() : null
-    def nativeRuntime = tool == null && explicit == null && task instanceof Test
+    if (legacy56 && task instanceof Javadoc && task.executable) explicit = new File(task.executable)
+    def provider = legacy56 && !task.hasProperty(providerName) ? null : task.property(providerName)
+    def tool = provider != null && provider.present ? provider.get() : null
+    def nativeRuntime = tool == null && task instanceof Test && (explicit == null || legacy56)
     if (tool == null && explicit == null && !nativeRuntime) {
         throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
     }
@@ -149,7 +160,8 @@ def inspectSelection = { task ->
         row.providerHome = tool.metadata.installationPath.asFile.absolutePath
         row.providerMajor = tool.metadata.languageVersion.toString()
     } else {
-        row.selectionProvenance = nativeRuntime ? 'native-effective-fork-options' : 'configured-native-executable'
+        row.selectionProvenance = legacy56 && task instanceof Javadoc ? 'gradle-5.6.4-configured-javadoc-executable-v1' :
+            (nativeRuntime ? 'native-effective-fork-options' : 'configured-native-executable')
     }
     row
 }
@@ -198,7 +210,9 @@ gradle.taskGraph.whenReady { graph ->
     if (mode == 'lock' && isRootSdkBuild()) {
         def directory = new File(captureOutput)
         directory.mkdirs()
-        new File(directory, 'task-sdks.json').text = JsonOutput.toJson([managerHome: new File(System.getProperty('java.home')).canonicalPath, tasks: rows.sort { a,b -> a.task <=> b.task ?: a.role <=> b.role }])
+        def receipt = [managerHome: new File(System.getProperty('java.home')).canonicalPath, tasks: rows.sort { a,b -> a.task <=> b.task ?: a.role <=> b.role }]
+        if (legacy56) receipt.gradleVersion = gradle.gradleVersion
+        new File(directory, 'task-sdks.json').text = JsonOutput.toJson(receipt)
     }
 }
 gradle.taskGraph.beforeTask { task ->

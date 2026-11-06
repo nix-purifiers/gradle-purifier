@@ -71,3 +71,19 @@ release, while both strict Nix projection and CLI publication reject before depl
 The `legacy-maven` workflow job runs these controls and preserves raw reports,
 source identities, SDK paths, consumer definitions and logs on failure as well
 as success. No catalog support point follows from a local pass alone.
+
+Gradle 5.6.4 has a separate basic profile. `basic-56.py` exercises capture,
+prefetch, cold network-isolated replay, sandbox tests/release and rebuilds;
+`--sdk` adds actual Java 8 JUnit and Javadoc execution under a Java 11 manager.
+`settings-56.py` accepts only fully parsed declarative Groovy settings, and
+checks native settings discovery and online remote controls before rejection.
+`plugin-56.py` checks project plugin marker/implementation replay through an
+external native repository init, with the origin stopped after prefetch.
+
+This profile rejects settings code beyond literal `rootProject.name` and
+`include` declarations, Kotlin settings, explicit settings files, ambiguous
+encodings and symlinks. Compilers require an explicit forked immutable SDK;
+disabled Test tasks establish no runtime role. Maven publish metadata and all
+strict projections/CLI publication on 5.6.4 are unsupported, including old
+locks without a metadata capability. Basic raw JAR/POM release remains usable.
+Native/pure JAR payloads match; ZIP timestamps can differ across those builds.

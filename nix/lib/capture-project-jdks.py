@@ -11,14 +11,16 @@ import subprocess
 def capture(receipt, descriptor, expression):
     for row in receipt['tasks']:
         provenance = row.get('selectionProvenance', 'resolved-selected-provider')
-        if provenance not in {'resolved-selected-provider', 'configured-native-executable', 'native-effective-fork-options'}:
+        if provenance not in {'resolved-selected-provider', 'configured-native-executable', 'native-effective-fork-options', 'gradle-5.6.4-configured-javadoc-executable-v1'}:
             raise ValueError('unsupported SDK selection provenance for ' + row['task'])
+        if provenance == 'gradle-5.6.4-configured-javadoc-executable-v1' and (receipt.get('gradleVersion') != '5.6.4' or row['role'] != 'javadoc'):
+            raise ValueError('unsupported native Gradle5.6.4 Javadoc provenance')
         if provenance == 'configured-native-executable' and row['role'] not in {'compiler', 'launcher'}:
             raise ValueError('explicit executable SDK provenance is unsupported for ' + row['role'])
         if provenance == 'native-effective-fork-options' and row['role'] != 'launcher':
             raise ValueError('native fork-options SDK provenance is unsupported for ' + row['role'])
-        if provenance in {'configured-native-executable', 'native-effective-fork-options'}:
-            binary = 'javac' if row['role'] == 'compiler' else 'java'
+        if provenance in {'configured-native-executable', 'native-effective-fork-options', 'gradle-5.6.4-configured-javadoc-executable-v1'}:
+            binary = 'javac' if row['role'] == 'compiler' else ('javadoc' if row['role'] == 'javadoc' else 'java')
             if row['executable'] != str(Path(row['home']) / 'bin' / binary):
                 raise ValueError('explicit SDK executable does not match ' + row['role'] + ' role')
     if not receipt['tasks'] or all(row['home']==receipt['managerHome'] and row['home']==row['canonicalHome'] for row in receipt['tasks']):
