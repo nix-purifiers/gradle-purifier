@@ -473,6 +473,14 @@ jobs:
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" \
             --cache "$RUNNER_TEMP/gradle-legacy-distributions" \
             --maven "$maven/bin/mvn" --output "$RUNNER_TEMP/gradle-legacy-proof/metadata"
+      - name: Preserve a real Nix producer input and native competing-version semantics
+        run: |
+          maven=$(cat "$RUNNER_TEMP/gradle-legacy-proof/maven-path.txt")
+          python tests/legacy-maven/provided.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-legacy-distributions" \
+            --maven "$maven/bin/mvn" --output "$RUNNER_TEMP/gradle-legacy-proof/provided"
       - name: Native semantics, public bindings and immutable companion boundaries
         run: |
           project="$RUNNER_TEMP/gradle-legacy-proof/plain/cold"
@@ -501,3 +509,6 @@ jobs:
             ${{ runner.temp }}/gradle-legacy-proof/source-revision
             ${{ runner.temp }}/gradle-legacy-proof/metadata/gradle-consumer/build.gradle
             ${{ runner.temp }}/gradle-legacy-proof/metadata/maven-consumer/pom.xml
+            ${{ runner.temp }}/gradle-legacy-proof/provided/**/build.gradle
+            ${{ runner.temp }}/gradle-legacy-proof/provided/**/pom.xml
+            ${{ runner.temp }}/gradle-legacy-proof/provided/**/src/**/*.java

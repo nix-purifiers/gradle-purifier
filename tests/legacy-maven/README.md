@@ -13,7 +13,11 @@ producer and dependency JAR/POM with the authoritative Nix projection. Fresh
 Gradle and Maven consumers resolve only the deployment for project dependencies.
 Maven may fetch its build plugins; consumer network isolation is not claimed.
 A direct competing dependency proves that a downloaded literal version remains
-a soft Maven request rather than becoming an invented strict constraint.
+a soft Maven request rather than becoming an invented strict constraint. `provided.py` uses the real
+existing Nix composition producer through `--input`, preserves its exact hard
+POM reference and full projected closure, and compares competing-version
+Gradle/Maven behavior with direct consumers of the immutable projection. It
+does not invent strict Gradle module metadata.
 
 The expected publication is independently built with the exact immutable
 `command.nix` packaged in the candidate CLI. Changing the live companion directory after building the CLI changes its
