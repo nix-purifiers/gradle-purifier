@@ -289,7 +289,12 @@ let
   };
 
   # Keep lazy companions beside the immutable common script in sandbox builds.
-  initScript = "${./.}/purifier.init.gradle";
+  initScript = "${
+    builtins.path {
+      path = ./.;
+      name = "gradle-purifier-lib";
+    }
+  }/purifier.init.gradle";
   portal = "https/plugins.gradle.org/m2";
 
   # The Gradle invocation shared by every build; the lock run (`gradle-purifier

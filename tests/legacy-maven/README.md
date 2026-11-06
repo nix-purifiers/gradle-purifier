@@ -19,6 +19,8 @@ The expected publication is independently built with the exact immutable
 `command.nix` packaged in the candidate CLI. Changing the live companion directory after building the CLI changes its
 producer derivation identity, so mixed-revision comparisons are invalid. The
 separate flake-builder tests and companion byte checks remain required controls.
+The immutable companion directory has a canonical store name, and `companion.py`
+requires exact command-versus-flake producer derivation identity.
 
 `native.py` checks native default/sentinel/explicit coordinates and snapshot POM
 byte parity. `parent.py` checks an unpublished parent and its published child.
