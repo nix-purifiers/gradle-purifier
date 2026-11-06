@@ -39,8 +39,7 @@ def guardDeployer = { deployer, expectedPom ->
     def filters = deployer.activePomFilters.toList()
     if (filters.size() != 1 || filters[0].name != 'default' || !filters[0].filter.is(PublishFilter.ALWAYS_ACCEPT)) fail('custom POM filters are unsupported')
 }
-def guardInitialActions = { task, original ->
-    def actions = task.actions.toList()
+def guardNativeActions = { task, original, actions ->
     def standardType = 'org.gradle.api.internal.project.taskfactory.StandardTaskAction'
     def wrapperType = 'org.gradle.api.internal.AbstractTask$TaskActionWrapper'
     if (actions.collect { it.getClass().name } != (original ? [wrapperType, standardType] : [standardType])) fail('custom Upload actions are unsupported')
@@ -60,6 +59,7 @@ def guardInitialActions = { task, original ->
             type.declaredFields*.type != [java.util.concurrent.atomic.AtomicBoolean]) fail('custom Upload warning action is unsupported')
     }
 }
+def guardInitialActions = { task, original -> guardNativeActions(task, original, task.actions.toList()) }
 def guardTask = { task ->
     if (task.getClass().name != 'org.gradle.api.tasks.Upload_Decorated') fail('unsupported Upload implementation')
     if (!task.enabled) fail('disabled Upload is unsupported')
@@ -163,6 +163,7 @@ def preflightDeployments = {
         if (current.owner.actions.size() != current.ownerActions.size() || !current.owner.actions.withIndex().every { action, i -> action.is(current.ownerActions[i]) } ||
             current.owner.dependsOn.size() != current.ownerDependencies.size() || !current.owner.dependsOn.every { dependency -> current.ownerDependencies.any { it.is(dependency) } }) fail('Upload actions or dependencies changed before deployment')
         guardTask(current.task)
+        guardNativeActions(current.task, current.task.is(current.owner), current.nativeActions)
         if (current.task.actions.size() != current.taskActions.size() || !current.task.actions.withIndex().every { action, i -> action.is(current.taskActions[i]) } ||
             current.task.dependsOn.size() != current.taskDependencies.size() || !current.task.dependsOn.every { dependency -> current.taskDependencies.any { it.is(dependency) } }) fail('deployment task actions or dependencies changed before deployment')
         if (gradle.taskGraph.hasTask(current.task)) {
@@ -228,13 +229,23 @@ configure = { project ->
         }
         // Every preflight validates the complete deployment graph, including
         // generated helpers that may otherwise skip their own task actions.
-        owned.each { record -> record.task.doFirst { preflightDeployments() } }
+        def helpers = owned.findAll { !it.task.is(task) }*.task
+        owned.each { record ->
+            // Configuration/artifact rules can run during the modifications
+            // above. Recheck native actions before accepting any baseline.
+            guardTask(record.task)
+            guardInitialActions(record.task, record.task.is(task))
+            def dependencies = record.task.is(task) ? helpers : []
+            if (record.task.dependsOn.size() != dependencies.size() || !record.task.dependsOn.every { dependency -> dependencies.any { it.is(dependency) } }) fail('custom Upload dependencies are unsupported')
+            record.nativeActions = record.task.actions.toList()
+            record.task.doFirst { preflightDeployments() }
+        }
         owned.each { record ->
             record.ownerActions = task.actions.toList()
-            record.ownerDependencies = task.dependsOn.toList()
+            record.ownerDependencies = helpers
             record.taskActions = record.task.actions.toList()
-            record.taskDependencies = record.task.dependsOn.toList()
-            record.graphDependencies = record.task.is(task) ? owned.findAll { !it.task.is(task) }*.task : []
+            record.taskDependencies = record.task.is(task) ? helpers : []
+            record.graphDependencies = record.taskDependencies
         }
         if (!preflightRegistered) {
             // Registered after build-script callbacks during projectsEvaluated:
