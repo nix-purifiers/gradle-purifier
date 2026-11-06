@@ -568,7 +568,7 @@ allprojects { project ->
                 (runCheck && t.name == 'check')
         })
         task.dependsOn(project.tasks.withType(PublishToMavenRepository).matching { publicationTask ->
-            publicationTask.repository.name == 'purifier' &&
+            publicationTask.repository?.name == 'purifier' &&
                 !internalLegacyPublication(project, publicationTask.publication)
         })
     }

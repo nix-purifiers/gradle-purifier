@@ -505,6 +505,9 @@ jobs:
           python tests/legacy-maven/schema.py --project "$project" --output "$RUNNER_TEMP/gradle-legacy-proof/schema"
           python tests/legacy-maven/native-metadata.py --gradle "$gradle" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/native-metadata"
+          python tests/legacy-maven/publication-selection.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/publication-selection"
           python tests/legacy-maven/metadata-unavailable.py \
             --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/metadata-unavailable"
