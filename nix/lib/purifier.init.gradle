@@ -564,13 +564,10 @@ allprojects { project ->
         task.dependsOn { project.configurations.findAll { PurifierRuntime.runtime(it) } }
         task.doLast { PurifierRuntime.export(project, new File(outputDir, 'runtime-data.json')) }
         task.dependsOn(project.tasks.matching { t ->
-            t.name in ['purifierInstall', 'purifierNativeInstall', 'purifierArchives', 'purifierLegacySnapshot', 'purifierLegacyMetadataSnapshot'] ||
+            t.name in ['publishAllPublicationsToPurifierRepository', 'purifierInstall', 'purifierNativeInstall', 'purifierArchives', 'purifierLegacySnapshot', 'purifierLegacyMetadataSnapshot'] ||
                 (runCheck && t.name == 'check')
         })
-        task.dependsOn(project.tasks.withType(PublishToMavenRepository).matching { publicationTask ->
-            publicationTask.repository?.name == 'purifier' &&
-                !internalLegacyPublication(project, publicationTask.publication)
-        })
+
     }
     // The archives of `assemble` go to archives/, under their keys. The
     // Kotlin Multiplatform plugin adds archive tasks to `assemble` after

@@ -34,13 +34,41 @@ if(realPublication==null) realPublication=publishing.publications.create('realUs
 def otherRepository=publishing.repositories.maven {name='differentTarget';url=uri('different-repository')}
 tasks.register('unconfiguredPublish',org.gradle.api.publish.maven.tasks.PublishToMavenRepository) {doLast {throw new GradleException('UNRELATED_PUBLISH_EXECUTED')}}
 tasks.register('differentTargetPublish',org.gradle.api.publish.maven.tasks.PublishToMavenRepository) {publication=realPublication;repository=otherRepository;doLast {throw new GradleException('DIFFERENT_TARGET_EXECUTED')}}
+def purifierRepository=publishing.repositories.getByName('purifier')
+tasks.register('sameRepositoryNoPublication',org.gradle.api.publish.maven.tasks.PublishToMavenRepository) {repository=purifierRepository;doLast {throw new GradleException('SAME_REPOSITORY_NULL_PUBLICATION_EXECUTED')}}
+tasks.register('manualMirrorPublish',org.gradle.api.publish.maven.tasks.PublishToMavenRepository) {publication=realPublication;repository=purifierRepository;doLast {throw new GradleException('MANUAL_MIRROR_EXECUTED')}}
+tasks.register('aggregateUserDependency') {doLast {file('aggregate-dependency-ran').text='ok'}}
+tasks.register('aggregateLazyDependency') {doLast {file('aggregate-lazy-dependency-ran').text='ok'}}
+tasks.register('aggregateLateDependency') {doLast {file('aggregate-late-dependency-ran').text='ok'}}
+tasks.register('aggregateDynamicBefore') {doLast {throw new GradleException('STALE_DYNAMIC_DEPENDENCY_EXECUTED')}}
+tasks.register('aggregateDynamicAfter') {doLast {file('aggregate-dynamic-dependency-ran').text='ok'}}
+def dynamicTarget='aggregateDynamicBefore'
+def nativeAggregate=tasks.getByName('publishAllPublicationsToPurifierRepository')
+nativeAggregate.dependsOn('aggregateUserDependency')
+nativeAggregate.dependsOn {tasks.named('aggregateLazyDependency')}
+nativeAggregate.dependsOn {tasks.named(dynamicTarget)}
+nativeAggregate.doLast {
+ for(marker in ['aggregate-dependency-ran','aggregate-lazy-dependency-ran','aggregate-late-dependency-ran','aggregate-dynamic-dependency-ran']) assert file(marker).text=='ok'
+ file('aggregate-action-ran').text='ok'
+}
+// Capture the untouched native aggregate before the late owned helper exists.
+def expectedDependencies=nativeAggregate.taskDependencies.getDependencies(nativeAggregate)*.path.sort()
+def expectedPublications=nativeAggregate.taskDependencies.getDependencies(nativeAggregate).findAll {it instanceof org.gradle.api.publish.maven.tasks.PublishToMavenRepository}*.path.sort()
+gradle.projectsEvaluated {
+ dynamicTarget='aggregateDynamicAfter'
+ nativeAggregate.dependsOn('aggregateLateDependency')
+ nativeAggregate.doLast {file('aggregate-late-action-ran').text='ok'}
+}
+
 gradle.taskGraph.whenReady { graph ->
  def aggregate=tasks.findByName('publishAllPublicationsToPurifierRepository')
  if(aggregate!=null && System.getenv('SELECTION_RECEIPT')) {
   def isOwned={task -> gradle.ext.has('purifierLegacyMaven') && gradle.ext.purifierLegacyMaven.ownsPublication(project,task.publication)}
-  def expected=aggregate.taskDependencies.getDependencies(aggregate).findAll {it instanceof org.gradle.api.publish.maven.tasks.PublishToMavenRepository && !isOwned(it)}*.path.sort()
+  def expected=expectedPublications
+  def actualDependencies=aggregate.taskDependencies.getDependencies(aggregate)*.path.sort()
+  def expectedAll=(expectedDependencies.findAll {it!=':aggregateDynamicBefore'}+[':aggregateLateDependency',':aggregateDynamicAfter']).sort()
   def actual=graph.allTasks.findAll {it instanceof org.gradle.api.publish.maven.tasks.PublishToMavenRepository}*.path.sort()
-  new File(System.getenv('SELECTION_RECEIPT')).text=groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([expected:expected,actual:actual,allTasks:graph.allTasks*.path]))
+  new File(System.getenv('SELECTION_RECEIPT')).text=groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([expected:expected,actual:actual,expectedDependencies:expectedAll,actualDependencies:actualDependencies,allTasks:graph.allTasks*.path]))
  }
 }
 ''')
@@ -53,6 +81,11 @@ gradle.taskGraph.whenReady { graph ->
     selection = json.loads(receipt.read_text())
     assert selection['actual'] == selection['expected'] and selection['actual'], selection
     assert not any('PurifierLegacyMetadataPublication' in task for task in selection['actual']), selection
+    assert selection['actualDependencies'] == selection['expectedDependencies'], selection
+    assert ':publishAllPublicationsToPurifierRepository' in selection['allTasks'], selection
+    assert all(not any(name in task for task in selection['allTasks']) for name in ['sameRepositoryNoPublication','manualMirrorPublish','differentTargetPublish','unconfiguredPublish','aggregateDynamicBefore']), selection
+    for marker in ['aggregate-dependency-ran','aggregate-lazy-dependency-ran','aggregate-late-dependency-ran','aggregate-dynamic-dependency-ran','aggregate-action-ran','aggregate-late-action-ran']:
+        assert (project / '.gradle-purifier/lock-run/build' / marker).read_text() == 'ok', marker
     assert not (project / 'different-repository').exists()
     lock = json.loads((project / 'gradle-purifier.lock.json').read_text())
     publications = lock['projects'][0]['publications']

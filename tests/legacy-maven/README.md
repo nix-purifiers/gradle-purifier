@@ -58,7 +58,9 @@ atomic deployment is not claimed.
 `native-metadata.py` checks owned publication creation, native generator actions,
 predicates, late mutations and implicit task dependencies. `publication-selection.py`
 compares native legacy/modern aggregate selection with unrelated unconfigured
-and different-target tasks, retaining real user publications. `metadata-unavailable.py`
+and different-target tasks, manual same-repository mirrors and missing publications.
+It retains real user publications, the aggregate node/actions, and direct, lazy
+and late dependencies, including a lazy target changed after helper setup. `metadata-unavailable.py`
 proves that an unsupported POM-only edge passes fresh locking, pure tests and raw
 release, while both strict Nix projection and CLI publication reject before deployment.
 
