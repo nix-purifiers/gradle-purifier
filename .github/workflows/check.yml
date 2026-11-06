@@ -234,6 +234,62 @@ jobs:
             ${{ runner.temp }}/gradle-sdk-proof/legacy-lifecycle/*.log
             ${{ runner.temp }}/gradle-sdk-proof/legacy-lifecycle/*.jar
 
+  project-sdk-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build the candidate and enable native offline namespace proofs
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-sdk-source-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-sdk-source-proof/source-revision"
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-sdk-source-candidate"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Project-owned SDK lifecycle with actual JUnit and Javadoc
+        run: |
+          python3 -B tests/sdk-sources/lifecycle.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-source-candidate/bin/gradle-purifier" \
+            --output "$RUNNER_TEMP/gradle-sdk-source-proof/lifecycle"
+      - name: Closed source schema and pure reconstruction
+        run: |
+          python3 -B tests/sdk-sources/schema.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-source-candidate/bin/gradle-purifier" \
+            --positive "$RUNNER_TEMP/gradle-sdk-source-proof/lifecycle/project" \
+            --output "$RUNNER_TEMP/gradle-sdk-source-proof/schema"
+      - name: Mandatory manager with zero tasks and all-manager task SDKs
+        run: |
+          python3 -B tests/sdk-sources/manager-controls.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-source-candidate/bin/gradle-purifier" \
+            --positive "$RUNNER_TEMP/gradle-sdk-source-proof/lifecycle/project" \
+            --output "$RUNNER_TEMP/gradle-sdk-source-proof/manager-controls"
+      - name: Exact SDK, actual manager, stale source and missing discovery boundaries
+        run: |
+          python3 -B tests/sdk-sources/negative.py \
+            --cli "$RUNNER_TEMP/gradle-sdk-source-candidate/bin/gradle-purifier" \
+            --positive "$RUNNER_TEMP/gradle-sdk-source-proof/lifecycle/project" \
+            --output "$RUNNER_TEMP/gradle-sdk-source-proof/negative"
+      - name: Upload project SDK source proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gradle-project-sdk-sources
+          path: |
+            ${{ runner.temp }}/gradle-sdk-source-proof/source-revision
+            ${{ runner.temp }}/gradle-sdk-source-proof/lifecycle/*.json
+            ${{ runner.temp }}/gradle-sdk-source-proof/lifecycle/*.log
+            ${{ runner.temp }}/gradle-sdk-source-proof/lifecycle/*.jar
+            ${{ runner.temp }}/gradle-sdk-source-proof/schema/*.json
+            ${{ runner.temp }}/gradle-sdk-source-proof/schema/*.log
+            ${{ runner.temp }}/gradle-sdk-source-proof/manager-controls/*.json
+            ${{ runner.temp }}/gradle-sdk-source-proof/manager-controls/*.log
+            ${{ runner.temp }}/gradle-sdk-source-proof/negative/*.json
+            ${{ runner.temp }}/gradle-sdk-source-proof/negative/*.log
+
   javadoc-link-metadata:
     runs-on: ubuntu-latest
     timeout-minutes: 20

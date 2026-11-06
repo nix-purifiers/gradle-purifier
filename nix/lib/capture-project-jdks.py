@@ -56,15 +56,60 @@ def capture(receipt, descriptor, expression):
         roles=sorted(roles, key=lambda row: (row['task'], row['role'])))}
 
 
+def capture_sources(receipt, manifest):
+    """Bind native observations to fully reconstructed project declarations."""
+    if manifest.get('version') != 'jvm-sdk-context-v2':
+        raise ValueError('unsupported explicit SDK context')
+    expected = manifest['manager']
+    actual = receipt['manager']
+    for key in ('executable', 'runtimeHome'):
+        if actual[key] != str(Path(actual[key]).resolve()) or actual[key] != expected[key]:
+            raise ValueError('actual Gradle manager ' + key + ' differs from the declared SDK adapter')
+    sdks = manifest['sdks']
+    roles = []
+    for row in receipt['tasks']:
+        provenance = row.get('selectionProvenance', 'resolved-selected-provider')
+        if provenance not in {'resolved-selected-provider', 'configured-native-executable',
+                              'native-effective-fork-options', 'gradle-5.6.4-configured-javadoc-executable-v1'}:
+            raise ValueError('unsupported SDK selection provenance for ' + row['task'])
+        if provenance == 'gradle-5.6.4-configured-javadoc-executable-v1' and (receipt.get('gradleVersion') != '5.6.4' or row['role'] != 'javadoc'):
+            raise ValueError('unsupported native Gradle5.6.4 Javadoc provenance')
+        if provenance == 'configured-native-executable' and row['role'] not in {'compiler', 'launcher'}:
+            raise ValueError('explicit executable SDK provenance is unsupported for ' + row['role'])
+        if provenance == 'native-effective-fork-options' and row['role'] != 'launcher':
+            raise ValueError('native fork-options SDK provenance is unsupported for ' + row['role'])
+        matches = [sdk for sdk in sdks if sdk['home'] == row['home']]
+        if len(matches) != 1:
+            raise ValueError('native SDK home is absent or ambiguous in the project declaration: ' + row['task'])
+        sdk = matches[0]
+        binary = {'compiler': 'javac', 'launcher': 'java', 'javadoc': 'javadoc'}[row['role']]
+        if (row['home'] != row['canonicalHome'] or row['home'] != str(Path(row['home']).resolve())
+                or row['executable'] != row['canonicalExecutable']
+                or row['executable'] != str(Path(sdk['home']) / 'bin' / binary)):
+            raise ValueError('native task SDK layout or executable differs from declared canonical SDK: ' + row['task'])
+        roles.append(dict(task=row['task'], role=row['role'], sdk=sdk['identityHash'], provenance=provenance))
+    keys = [(row['task'], row['role']) for row in roles]
+    if len(set(keys)) != len(keys):
+        raise ValueError('duplicate native SDK task roles')
+    context = {key: manifest[key] for key in ('version', 'declarationHash', 'sdks', 'manager')}
+    context['roles'] = sorted(roles, key=lambda row: (row['task'], row['role']))
+    return {sdks[0]['system']: context}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('receipt',type=Path)
     parser.add_argument('descriptor',type=Path)
     parser.add_argument('output',type=Path)
+    parser.add_argument('--source-context',type=Path)
     args=parser.parse_args()
     try:
-        result=capture(json.loads(args.receipt.read_text()),json.loads(args.descriptor.read_text()),
-            Path(__file__).with_name('capture-project-jdk.nix'))
+        receipt = json.loads(args.receipt.read_text())
+        if args.source_context:
+            result = capture_sources(receipt, json.loads(args.source_context.read_text()))
+        else:
+            result=capture(receipt,json.loads(args.descriptor.read_text()),
+                Path(__file__).with_name('capture-project-jdk.nix'))
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         raise SystemExit('gradle-purifier: project SDK capture failed: '+str(error))
     args.output.write_text(json.dumps(result,sort_keys=True,separators=(',',':'))+'\n')

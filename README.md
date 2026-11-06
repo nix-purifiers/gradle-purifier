@@ -222,7 +222,7 @@ The builder takes these arguments besides `src`, the root of the build:
 - `doCheck` runs the `check` task of each project in its package build.
 - `srcFilter` filters the build root before it is copied into the store.
 
-Native capture also records additional project SDKs selected by root-build
+Without a source declaration, native capture also records additional project SDKs selected by root-build
 `JavaCompile`, `Test`, `JavaExec` and `Javadoc` task providers and effective
 executable overrides. Automatic capture currently recognizes canonical headless compiler outputs
 from the command's pinned nixpkgs. A Java major or vendor name alone is not SDK identity. The
@@ -236,7 +236,7 @@ Selected roles are not claims that task actions executed. Runtime outcomes
 remain separate diagnostics. A newly requested SDK role absent from a split-SDK
 lock requires `gradle-purifier lock --relock -- <task>`. Additional ambient SDK homes,
 mutable aliases and unknown custom SDK outputs are rejected with relock advice;
-typed custom SDK inputs in CLI capture remain outside this first implementation. Automatic
+project-owned SDK sources use the opt-in declaration below. Automatic
 additional-SDK capture covers root-build roles; a nested build requesting a
 non-manager SDK fails explicitly. It does not claim complete custom-task coverage.
 
@@ -265,6 +265,67 @@ builder API as validated Nix inputs; absent metadata never discovers or imports
 an ambient JDK. The bounded regression uses Gradle 8.14.3 with a Java 21 manager
 and Java 8 project tools, plus its same-SDK control; it establishes no historical
 Gradle API or SDK support range.
+
+### Project-owned JVM SDK sources
+
+On `x86_64-linux`, `gradle-purifier.sdks.json` opts a project into immutable
+external SDK selection. For example, this declaration selects an explicit
+manager adapter from the published shared library:
+
+```json
+{
+  "version": 1,
+  "system": "x86_64-linux",
+  "sdks": [{
+    "id": "manager",
+    "source": {
+      "type": "github",
+      "owner": "nix-purifiers",
+      "repo": "purifier",
+      "rev": "f444063c705056a605583bd273cc8147f57808ee",
+      "narHash": "sha256-NaeaVq9B520WgzmRSMLGdN2zqnFlvM/wfZ8hECHhYqY="
+    },
+    "selectionKind": "jvm-sdk-adapter-v1",
+    "attribute": ["lib", "jvmSdkAdapters", "x86_64-linux", "openjdk17"]
+  }],
+  "manager": "manager"
+}
+```
+
+Add SDK selections for the native project's compiler, JUnit, JavaExec and
+Javadoc roles. Task-only selections may use `derivation-v1` and a derivation
+with an explicit context-bearing `home`. The manager requires a source-owned
+`jvm-sdk-adapter-v1` record declaring its executable and runtime home. This
+backend accepts immutable GitHub sources with immutable GitHub transitive
+inputs. Local mutable flakes and inferred runtime layouts are unsupported.
+
+The declaration participates in the build-definition hash. Change its pins
+explicitly and run `gradle-purifier lock --relock`; relocking validates those
+pins rather than moving them. `--java` and direct builder JDK overrides cannot
+be combined with this declaration. Source capture and CLI replay use explicit
+pure evaluation with import-from-derivation disabled.
+
+The versioned `jvm-sdk-context-v2` lock records a mandatory actual Gradle
+manager, including builds with no SDK tasks or only manager-SDK tasks. SDK
+identity covers exact output, home and Nix contexts. Manager identity also
+covers executable and runtime home contexts; Java version strings alone never
+select a replacement. Replay reconstructs source-owned values and retains SDK
+and source-tree GC roots. An actual manager or selected task SDK mismatch
+fails before the task executes. Disabled Test tasks supply no source-mode role.
+
+Original native SDK selections and project files are preserved. CLI capture
+and sandbox launches supply startup discovery defaults when no original native
+discovery configuration is present. Existing native discovery properties and
+arguments take precedence. Ordinary Gradle and IDE commands must already have
+working native SDK discovery, such as `org.gradle.java.installations.paths` in
+the original project or user Gradle configuration. Configure actual declared
+SDK homes, disable unwanted automatic downloads, and select the declared
+manager. Prefetch does not rewrite project or global Gradle properties.
+Missing native discovery remains an error; an init script cannot reliably add
+it after Gradle has initialized its toolchain services.
+
+This opt-in mechanism establishes no Java 6/7 or Gradle version range claim.
+Compatibility records require the corresponding native project workflow proof.
 
 `lib.gradle-purifier.readLock { src, lockFile }` reads the lock into the
 shape that every purifier shares: `entries`, `outputs` and `problems`.

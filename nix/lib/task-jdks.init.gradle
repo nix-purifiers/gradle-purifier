@@ -12,7 +12,19 @@ if (!mode) return
 def legacy56 = gradle.gradleVersion == '5.6.4'
 def contextPath = System.getenv('GRADLE_PURIFIER_JDK_CONTEXT') ?: System.getProperty('gradle.purifier.jdk.context')
 def expected = contextPath ? new JsonSlurper().parse(new File(contextPath)) : null
-if (expected) {
+def sourceSdkMode = expected?.version == 'jvm-sdk-context-v2'
+def actualSourceManager = null
+if (sourceSdkMode) {
+    if (System.getProperty('os.name') != 'Linux') throw new GradleException('gradle-purifier: explicit SDK manager observation currently requires Linux')
+    actualSourceManager = [executable: new File('/proc/self/exe').canonicalPath,
+        runtimeHome: new File(System.getProperty('java.home')).canonicalPath]
+    if (actualSourceManager.executable != expected.manager?.executable ||
+        actualSourceManager.runtimeHome != expected.manager?.runtimeHome ||
+        new File(System.getProperty('java.home')).absolutePath != expected.manager?.runtimeHome) {
+        throw new GradleException('gradle-purifier: actual Gradle manager differs from the declared SDK adapter; select the declared native manager and relock')
+    }
+}
+if (expected && !sourceSdkMode) {
     gradle.startParameter.projectProperties = gradle.startParameter.projectProperties + [
         'org.gradle.java.installations.auto-detect': 'false',
         'org.gradle.java.installations.auto-download': 'false',
@@ -30,7 +42,7 @@ def observations = Collections.synchronizedMap([:])
 def captureOutput = System.getenv('GRADLE_PURIFIER_OUTPUT')
 def roleOf = { task ->
     // A disabled old Test task establishes no runtime selection or execution.
-    if (legacy56 && task instanceof Test && !task.enabled) return null
+    if ((legacy56 || sourceSdkMode) && task instanceof Test && !task.enabled) return null
     task instanceof JavaCompile ? 'compiler' : task instanceof Javadoc ? 'javadoc' :
         (task instanceof Test || task instanceof JavaExec) ? 'launcher' : null
 }
@@ -134,7 +146,16 @@ def inspectSelection = { task ->
     }
     if (legacy56 && task instanceof Javadoc && task.executable) explicit = new File(task.executable)
     def provider = legacy56 && !task.hasProperty(providerName) ? null : task.property(providerName)
-    def tool = provider != null && provider.present ? provider.get() : null
+    def tool
+    try { tool = provider != null && provider.present ? provider.get() : null }
+    catch (Exception error) {
+        if (sourceSdkMode) {
+            def advice = 'gradle-purifier: project SDK discovery is unavailable; configure org.gradle.java.installations.paths in the original native Gradle configuration before using provider-based SDK tasks'
+            logger.error(advice)
+            throw new GradleException(advice, error)
+        }
+        throw error
+    }
     def nativeRuntime = tool == null && task instanceof Test && (explicit == null || legacy56)
     if (tool == null && explicit == null && !nativeRuntime) {
         throw new GradleException("gradle-purifier: ${task.path} has no selected SDK; run 'gradle-purifier lock --relock -- ${task.path}'")
@@ -171,6 +192,14 @@ def select = { task ->
         throw new GradleException("gradle-purifier: cannot resolve SDK role for ${task.path}; run 'gradle-purifier lock --relock -- ${task.path}'", error)
     }
 }
+def checkDeclaredSource = { row ->
+    def matches = expected.sdks.findAll { it.home == row.home }
+    def binary = row.role == 'compiler' ? 'javac' : row.role == 'javadoc' ? 'javadoc' : 'java'
+    if (matches.size() != 1 || row.home != row.canonicalHome || row.executable != row.canonicalExecutable ||
+        row.executable != new File(matches[0].home, 'bin/' + binary).absolutePath) {
+        throw new GradleException("gradle-purifier: ${row.task} selects an SDK absent from the exact project declaration; select a declared canonical SDK and relock")
+    }
+}
 def check = { row ->
     if (!expected || expected.legacy) {
         def allowed = [new File(System.getProperty('java.home')).canonicalPath] + (expected?.explicitHomes ?: [])
@@ -198,19 +227,22 @@ gradle.taskGraph.whenReady { graph ->
         def row = select(task)
         if (row) {
             if (!isRootSdkBuild()) {
-                def managerHome = expected?.managerHome ?: new File(System.getProperty('java.home')).canonicalPath
+                def managerHome = sourceSdkMode ? expected.launchHome : (expected?.managerHome ?: new File(System.getProperty('java.home')).canonicalPath)
                 def allowed = [managerHome] + ((expected?.legacy) ? expected.explicitHomes : [])
                 if (row.home != row.canonicalHome || !allowed.contains(row.home)) throw new GradleException('gradle-purifier: non-manager SDK tasks in nested builds require explicit supported SDK input handling; automatic capture currently covers root-build roles')
                 return
             }
-            if (mode == 'lock') rows << row
-            else check(row)
+            if (mode == 'lock') {
+                if (sourceSdkMode) checkDeclaredSource(row)
+                rows << row
+            } else check(row)
         }
     }
     if (mode == 'lock' && isRootSdkBuild()) {
         def directory = new File(captureOutput)
         directory.mkdirs()
         def receipt = [managerHome: new File(System.getProperty('java.home')).canonicalPath, tasks: rows.sort { a,b -> a.task <=> b.task ?: a.role <=> b.role }]
+        if (sourceSdkMode) receipt.manager = actualSourceManager
         if (legacy56) receipt.gradleVersion = gradle.gradleVersion
         new File(directory, 'task-sdks.json').text = JsonOutput.toJson(receipt)
     }

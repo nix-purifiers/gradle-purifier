@@ -151,7 +151,22 @@ let
   defaultJdk =
     javaPackages.compiler."openjdk${toString gradle.javaMajor}".headless
       or (throw "gradle-purifier: javaPackages has no openjdk${toString gradle.javaMajor} for the Java the lock was made with; pass `jdk`.");
-  jdk' = if jdk != null then jdk else defaultJdk;
+  sourceSdkMode =
+    hasProjectJdks
+    && lib.any (context: (context.version or null) == "jvm-sdk-context-v2") (
+      builtins.attrValues gradle.projectJdks
+    );
+  jdk' =
+    if sourceSdkMode then
+      assert
+        jdk == null && toolchainJdks == [ ]
+        || throw "gradle-purifier: explicit SDK declarations cannot be mixed with direct JDK overrides";
+      selectedProjectJdks.managerSdk
+    else if jdk != null then
+      jdk
+    else
+      defaultJdk;
+  managerSdkHome = if sourceSdkMode then selectedProjectJdks.managerSdkHome else javaHome jdk';
   javaHome = j: j.home or "${j}/lib/openjdk";
   hasProjectJdks = gradle.projectJdks != null;
   selectedProjectJdks =
@@ -159,6 +174,7 @@ let
       (import ./project-jdks.nix { inherit lib purifier; }) {
         contexts = gradle.projectJdks;
         system = stdenv.hostPlatform.system;
+        declarationFile = src + "/gradle-purifier.sdks.json";
       }
     else
       {
@@ -180,7 +196,12 @@ let
   hasSdkContext = hasProjectJdks || explicitToolchainJdks != [ ];
   sdkContext = writeText "gradle-project-sdk-context.json" (
     builtins.toJSON (
-      if hasSdkContext then
+      if sourceSdkMode then
+        assert
+          jdk == null && toolchainJdks == [ ]
+          || throw "gradle-purifier: explicit SDK declarations cannot be mixed with direct JDK overrides";
+        selectedProjectJdks.runtimeContext
+      else if hasSdkContext then
         {
           legacy = !hasProjectJdks;
           explicitHomes = map javaHome explicitToolchainJdks;
@@ -192,6 +213,17 @@ let
         null
     )
   );
+
+  sdkDiscoveryHelper =
+    runCommand "gradle-sdk-discovery-properties"
+      {
+        nativeBuildInputs = [ javaPackages.compiler.openjdk8.headless ];
+      }
+      ''
+            mkdir -p "$out"
+            cp ${./SdkDiscoveryProperties.java} SdkDiscoveryProperties.java
+        javac -source 6 -target 6 -d "$out" SdkDiscoveryProperties.java
+      '';
 
   fetchEntry = purifier.fetchEntry (fetcherArgs // fetchers);
 
@@ -340,13 +372,38 @@ let
     ${lib.optionalString hasSdkContext ''
       export GRADLE_PURIFIER_JDK_CONTEXT=${sdkContext}
     ''}
-    export JAVA_HOME=${javaHome jdk'}
+    export JAVA_HOME=${lib.escapeShellArg managerSdkHome}
     mkdir -p "$HOME" "$GRADLE_USER_HOME"
     ${lib.optionalString hasKonan konanSetup}
     GRADLE_PURIFIER_MODE="" ${python3}/bin/python ${./gradle-flags.py} sandbox "$TMPDIR/gradle-help.txt" \
       --gradle ${distribution}/bin/gradle \
       --arguments-json ${lib.escapeShellArg (builtins.toJSON gradle.gradleArguments)} > "$TMPDIR/gradle-flags.txt"
     mapfile -t gradleFlags < "$TMPDIR/gradle-flags.txt"
+    ${
+      if sourceSdkMode then
+        ''
+          sourceDiscoveryArgs=()
+          if [ "$(${
+            lib.escapeShellArg (managerSdkHome + "/bin/java")
+          } -cp ${sdkDiscoveryHelper} SdkDiscoveryProperties "$PWD/gradle.properties" -- ${lib.escapeShellArgs gradle.gradleArguments})" = absent ]; then
+            sourceDiscoveryArgs=(${
+              lib.escapeShellArg (
+                "-Porg.gradle.java.installations.paths="
+                + lib.concatStringsSep "," selectedProjectJdks.runtimeContext.paths
+              )
+            } -Porg.gradle.java.installations.auto-detect=false)
+          fi
+        ''
+      else
+        ''
+          sourceDiscoveryArgs=(-Porg.gradle.java.installations.auto-detect=false ${
+            lib.escapeShellArg (
+              "-Porg.gradle.java.installations.paths="
+              + lib.concatMapStringsSep "," javaHome ([ jdk' ] ++ allToolchainJdks)
+            )
+          })
+        ''
+    }
     status=0
     ${distribution}/bin/gradle \
       --init-script ${initScript} \
@@ -355,10 +412,7 @@ let
       -Dorg.gradle.native=false \
       -Djava.io.tmpdir="$TMPDIR" \
       -Porg.gradle.java.installations.auto-download=false \
-      -Porg.gradle.java.installations.auto-detect=false \
-      -Porg.gradle.java.installations.paths=${
-        lib.concatMapStringsSep "," javaHome ([ jdk' ] ++ allToolchainJdks)
-      } \
+      "''${sourceDiscoveryArgs[@]}" \
       -Pkotlin.compiler.execution.strategy=in-process \
       ${lib.escapeShellArgs gradle.gradleArguments} \
       ${lib.escapeShellArgs tasks} --offline "''${gradleFlags[@]}" --stacktrace </dev/null 2> >(tee "$TMPDIR/gradle-errors" >&2) || status=$?
@@ -429,7 +483,7 @@ let
         ${lib.optionalString hasApplication ''
           cp -r "$built/application/." "$out/"
           rm -f "$out"/bin/*.bat
-          wrapProgram "$out/bin/${project.application.name}" --set-default JAVA_HOME ${javaHome jdk'}
+          wrapProgram "$out/bin/${project.application.name}" --set-default JAVA_HOME ${lib.escapeShellArg managerSdkHome}
         ''}
         ${lib.optionalString hasExecutables ''
           mkdir -p "$out/bin"

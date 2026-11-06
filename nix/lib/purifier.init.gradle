@@ -866,8 +866,17 @@ if (rootBuild && mode == 'lock') {
         }
         def file = new File(output, 'projects.json')
         file.parentFile.mkdirs()
+        def nativeJavaMajor
+        try { nativeJavaMajor = Runtime.version().feature() }
+        catch (groovy.lang.MissingMethodException unavailable) {
+            // Java 8 and earlier have no Runtime.Version API. This field is
+            // a compatibility hint; explicit SDK identity remains source-bound.
+            def specification = System.getProperty('java.specification.version')
+            if (!(specification ==~ /(?:1\.)?[0-9]+/)) throw new GradleException('gradle-purifier: unsupported native JVM specification version')
+            nativeJavaMajor = Integer.parseInt(specification.startsWith('1.') ? specification.substring(2) : specification)
+        }
         file.text = JsonOutput.prettyPrint(JsonOutput.toJson([
-            javaMajor      : Runtime.version().feature(),
+            javaMajor      : nativeJavaMajor,
             rootProjectName: g.rootProject.name,
             projects       : projects.sort { it.path },
         ]))
