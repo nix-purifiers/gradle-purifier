@@ -80,6 +80,9 @@ nativeAggregate.doLast {
  file('aggregate-action-ran').text='ok'
 }
 // Capture the untouched native aggregate before the late owned helper exists.
+def originalTaskDependency=nativeAggregate.taskDependencies
+def originalInputs=nativeAggregate.inputs
+def originalNotation=nativeAggregate.dependsOn.toList()
 def baselineVisits=inputVisits
 def baselineDependencies=nativeAggregate.taskDependencies.getDependencies(nativeAggregate)
 def baselineInputVisits=inputVisits-baselineVisits
@@ -104,12 +107,18 @@ gradle.taskGraph.whenReady { graph ->
  if(aggregate!=null && System.getenv('SELECTION_RECEIPT')) {
   def isOwned={task -> gradle.ext.has('purifierLegacyMaven') && gradle.ext.purifierLegacyMaven.ownsPublication(project,task.publication)}
   def expected=(expectedPublications+lateExpectedPublications).sort()
+  def sameNativeDependency=aggregate.taskDependencies.is(originalTaskDependency)
+  def sameNativeInputs=aggregate.inputs.is(originalInputs)
+  def actualNotation=aggregate.dependsOn.toList()
+  def retainedIndexes=originalNotation.collect { value -> actualNotation.findIndexOf { candidate -> candidate.is(value) } }
+  def notationPreserved=retainedIndexes.every {it>=0} && retainedIndexes==retainedIndexes.sort(false)
+  assert sameNativeDependency && sameNativeInputs && notationPreserved
   def before=inputVisits
   def actualDependencies=aggregate.taskDependencies.getDependencies(aggregate)*.path.sort()
   def actualInputVisits=inputVisits-before
   def expectedAll=(expectedDependencies.findAll {it!=':aggregateDynamicBefore'}+[':aggregateLateDependency',':aggregateDynamicAfter']+lateExpectedDependencies).sort()
   def actual=graph.allTasks.findAll {it instanceof org.gradle.api.publish.maven.tasks.PublishToMavenRepository}*.path.sort()
-  new File(System.getenv('SELECTION_RECEIPT')).text=groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([expected:expected,actual:actual,expectedDependencies:expectedAll,actualDependencies:actualDependencies,baselineInputVisits:baselineInputVisits,actualInputVisits:actualInputVisits,allTasks:graph.allTasks*.path]))
+  new File(System.getenv('SELECTION_RECEIPT')).text=groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([expected:expected,actual:actual,expectedDependencies:expectedAll,actualDependencies:actualDependencies,baselineInputVisits:baselineInputVisits,actualInputVisits:actualInputVisits,sameNativeDependency:sameNativeDependency,sameNativeInputs:sameNativeInputs,rawNotationIdentityAndOrderPreserved:notationPreserved,allTasks:graph.allTasks*.path]))
  }
 }
 ''')
