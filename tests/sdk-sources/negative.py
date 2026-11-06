@@ -128,8 +128,11 @@ project = clone('missing-discovery')
 run('missing-discovery-capture',[cli,'lock','--relock'],project)
 missing_env = dict(GRADLE_USER_HOME=str(out/'missing-gradle-home'))
 run('missing-discovery-prefetch',[cli,'prefetch'],project,extra=missing_env)
+# Keep the unavailable-provider branch independent of SDKs installed on the host.
 run('missing-discovery-ordinary',[*namespace,'bash',project/'.gradle-purifier/distribution/bin/gradle',
-    '--offline','--no-daemon','check'],project,False,'project SDK discovery is unavailable',missing_env)
+    '--offline','--no-daemon','-Porg.gradle.java.installations.auto-detect=false',
+    '-Porg.gradle.java.installations.auto-download=false','check'],project,False,
+    'project SDK discovery is unavailable',missing_env)
 assert not (project/'test-started').exists()
 (out/'result.json').write_text(json.dumps(dict(status='passed', exactJavaVersion=versions[0],
     differentSdkIdentities=True, foreignSdkRejectedBeforeActions=True,
