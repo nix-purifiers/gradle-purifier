@@ -508,6 +508,11 @@ jobs:
           python tests/legacy-maven/publication-selection.py \
             --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/publication-selection"
+          for edge in direct provider lazy name; do
+            python tests/legacy-maven/publication-selection.py --late-private-dependency --private-edge-kind "$edge" \
+              --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+              --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/late-private-$edge"
+          done
           python tests/legacy-maven/metadata-unavailable.py \
             --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/metadata-unavailable"
