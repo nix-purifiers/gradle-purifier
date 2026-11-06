@@ -16,12 +16,24 @@ A direct competing dependency proves that a downloaded literal version remains
 a soft Maven request rather than becoming an invented strict constraint. `provided.py` uses the real
 existing Nix composition producer through `--input`, preserves its exact hard
 POM reference and full projected closure, and compares competing-version
-Gradle/Maven behavior with direct consumers of the immutable projection. It
-does not invent strict Gradle module metadata. In the measured conflict case,
-Gradle 6.9 selects a direct competing `9.9.9` and returns `0`, while Maven keeps
-the projected dependency and returns `42`. Both outcomes match direct consumers
-of the immutable projection. That parity proves faithful transport; this
-POM-only edge does not enforce Nix dependency authority under Gradle conflicts.
+Gradle/Maven behavior with direct consumers of the immutable projection.
+
+Fresh capture and explicit relock add the versioned `nativeMetadata` capability.
+For the supported native Java component, a purifier-owned native Maven publication
+emits Gradle module metadata without a build identifier. Its native POM writer
+adds the metadata marker around the already rendered original POM body;
+descriptions, licenses, properties and original callbacks remain intact.
+The producer validates the POM dependency graph against the untouched Java
+component POM, including types, classifiers, optional edges and exclusions.
+Unsupported graphs retain the original JAR/POM for locking, tests and raw release.
+Strict projection and CLI publication require complete validated metadata.
+
+With the actual provided input, Gradle rejects an available competing `9.9.9`
+through native projected module constraints; Maven retains the projected input
+and returns `42`. Downloaded literal versions remain soft requests. Old typed
+locks without the capability retain their POM-only scope: the preserved baseline
+conflict selected `9.9.9` under Gradle and returned `0`. Explicit relock migrates
+the binding; basic replay does not silently upgrade it.
 
 The expected publication is independently built with the exact immutable
 `command.nix` packaged in the candidate CLI. Changing the live companion directory after building the CLI changes its
@@ -35,12 +47,18 @@ byte parity. `parent.py` checks an unpublished parent and its published child.
 `schema.py`, `negative.py`, and `companion.py` check public owner bindings,
 collisions, actual task/deployer guards, and immutable companion identity.
 
-The adapter accepts the proven release-only, unclassified JAR/POM closure and
-preserves its projected bytes and original repository objects. SNAPSHOT routing,
-custom Upload behavior, custom deployment transports, unmapped descriptors,
-classifiers, and additional Gradle metadata fail explicitly. Native mapping of
-those inputs requires further evidence. An arbitrary late Gradle listener can
-execute user code before a task guard; atomic deployment is not claimed.
+The new capability transports the complete accepted projection through native
+Upload: module metadata, source classifiers, parent POMs and imported BOM
+sidecars retain their bytes. It does not fetch every artifact named by BOM
+constraints. Old bindings keep their release-only unclassified JAR/POM limit.
+SNAPSHOT routing and custom Upload/deployer behavior remain unsupported.
+An arbitrary late Gradle listener can execute user code before a task guard;
+atomic deployment is not claimed.
+
+`native-metadata.py` checks owned publication creation, native generator actions,
+predicates, late mutations and implicit task dependencies. `metadata-unavailable.py`
+proves that an unsupported POM-only edge passes fresh locking, pure tests and raw
+release, while both strict Nix projection and CLI publication reject before deployment.
 
 The `legacy-maven` workflow job runs these controls and preserves raw reports,
 source identities, SDK paths, consumer definitions and logs on failure as well

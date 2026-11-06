@@ -1,0 +1,293 @@
+// SPDX-License-Identifier: MIT
+// Native Java metadata for a typed Gradle 6.9.4 legacy publication. The
+// original native POM remains authoritative; the native writer adds its marker.
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import org.gradle.api.Action
+import org.gradle.api.XmlProvider
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.maven.tasks.GenerateMavenPom
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
+
+ def context = gradle.ext.purifierLegacyMaven
+ def engine = context.nativeMetadataEngine
+ def fail = { message -> throw new GradleException('gradle-purifier: native legacy metadata ' + message) }
+ def field = { object, owner, name ->
+    def type = object.getClass()
+    while (type != null && type.name != owner) type = type.superclass
+    if (type == null) fail('unknown native implementation')
+    def value = type.getDeclaredField(name); value.accessible = true; value.get(object)
+ }
+ def digest = { byte[] bytes -> MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+ def owned = Collections.newSetFromMap(new IdentityHashMap())
+ def pending = null
+ def records = []
+ def name = 'purifierLegacyMetadata'
+ def cap = [kind:'gradle-java-component', version:1]
+ def isNativePublication = { publication ->
+    publication.getClass().name == 'org.gradle.api.publish.maven.internal.publication.DefaultMavenPublication_Decorated'
+ }
+ engine.owns = { project, publication ->
+    // configureEach callbacks run before create() returns. Claim only the
+    // exact native object being constructed for this owned operation.
+    if (pending?.is(project) && publication.name == name) {
+        if (!isNativePublication(publication)) fail('unsupported publication factory')
+        owned.add(publication)
+    }
+    owned.contains(publication)
+ }
+ def actions = { task, type, method ->
+    if (task.getClass().name != type.name + '_Decorated') fail('unsupported metadata task factory')
+    def values = task.actions.toList()
+    if (values.size() != 1 || values[0].getClass().name != 'org.gradle.api.internal.project.taskfactory.StandardTaskAction' ||
+        !field(values[0], 'org.gradle.api.internal.project.taskfactory.StandardTaskAction', 'type').is(task.getClass()) ||
+        field(values[0], 'org.gradle.api.internal.project.taskfactory.StandardTaskAction', 'method') != type.getDeclaredMethod(method)) fail('custom metadata task actions are unsupported')
+    values
+ }
+ def emptyFinalizers = { task ->
+    def deps = task.finalizedBy
+    def type = 'org.gradle.api.internal.tasks.DefaultTaskDependency'
+    if (deps.getClass().name != type ||
+        !field(deps, type, 'immutableValues').isEmpty() ||
+        (field(deps, type, 'mutableValues') != null && !field(deps, type, 'mutableValues').isEmpty())) fail('custom metadata task finalizers are unsupported')
+ }
+ def guardState = { task ->
+    if (!task.enabled) fail('disabled metadata task is unsupported')
+    emptyFinalizers(task)
+    def specs = task.onlyIf.specs.toList()
+    if (specs.isEmpty() || specs[0].getClass().name != 'org.gradle.api.internal.AbstractTask$8') fail('custom metadata task predicates are unsupported')
+    if (!field(specs[0], 'org.gradle.api.internal.AbstractTask$8', 'this$0').is(task)) fail('native metadata predicate task binding changed')
+    if (task instanceof GenerateModuleMetadata) {
+        if (specs.size() != 2) fail('custom metadata task predicates are unsupported')
+        def type = specs[1].getClass()
+        if (!type.synthetic || !type.name.startsWith(GenerateModuleMetadata.name + '$$Lambda$') ||
+            !type.classLoader.is(GenerateModuleMetadata.classLoader) ||
+            type.protectionDomain.codeSource.location != GenerateModuleMetadata.protectionDomain.codeSource.location ||
+            type.declaredFields.length != 1 || type.declaredFields[0].name != 'arg$1' ||
+            type.declaredFields[0].type != GenerateModuleMetadata || !field(specs[1],type.name,'arg$1').is(task)) fail('unsupported native metadata predicate implementation')
+    } else if (specs.size() != 1) fail('custom metadata task predicates are unsupported')
+
+ }
+ def mappingClean = { publication ->
+    def strategy = publication.versionMappingStrategy
+    def type = 'org.gradle.api.publish.internal.versionmapping.DefaultVersionMappingStrategy'
+    if (strategy.getClass().name != type + '_Decorated' || !field(strategy,type,'mappingsForAllVariants').isEmpty() ||
+        !field(strategy,type,'attributeBasedMappings').isEmpty()) fail('custom metadata version mapping is unsupported')
+ }
+ def componentModel = { project, component, artifact ->
+    if (component == null || component.getClass().name != 'org.gradle.api.plugins.internal.DefaultAdhocSoftwareComponent_Decorated') return null
+    def usages = component.usages.toList()
+    if ((usages.collect { it.name } as Set) != (['apiElements','runtimeElements'] as Set) || usages.size() != 2) return null
+    def rows = []
+    for (usage in usages) {
+        def attributes = usage.attributes.keySet().collectEntries { key -> [(key.name): usage.attributes.getAttribute(key).toString()] }
+        if (attributes.keySet() != (['org.gradle.category','org.gradle.dependency.bundling','org.gradle.jvm.version','org.gradle.libraryelements','org.gradle.usage'] as Set) ||
+            attributes['org.gradle.category'] != 'library' || attributes['org.gradle.dependency.bundling'] != 'external' ||
+            attributes['org.gradle.libraryelements'] != 'jar' || !(attributes['org.gradle.jvm.version'] ==~ /[1-9][0-9]*/) ||
+            attributes['org.gradle.usage'] != (usage.name == 'apiElements' ? 'java-api' : 'java-runtime')) return null
+        def files = usage.artifacts.toList()
+        if (files.size() != 1 || files[0].file.canonicalFile != artifact.file.canonicalFile ||
+            files[0].type != 'jar' || files[0].extension != 'jar' || files[0].classifier) return null
+        if (!usage.dependencyConstraints.isEmpty() || !usage.capabilities.isEmpty() || !usage.globalExcludes.isEmpty()) return null
+        def dependencies = []
+        for (dependency in usage.dependencies) {
+            if (!(dependency instanceof org.gradle.api.artifacts.ExternalModuleDependency) || !dependency.version ||
+                dependency.force || dependency.changing || dependency.targetConfiguration || dependency.endorsingStrictVersions ||
+                !dependency.attributes.keySet().isEmpty() || !dependency.requestedCapabilities.isEmpty() || dependency.versionConstraint.branch ||
+                dependency.versionConstraint.requiredVersion != dependency.version || dependency.versionConstraint.strictVersion || dependency.versionConstraint.preferredVersion ||
+                !dependency.versionConstraint.rejectedVersions.isEmpty()) return null
+            dependencies << [type:dependency.getClass().name,group:dependency.group,name:dependency.name,version:dependency.version,
+                transitive:dependency.transitive,artifacts:dependency.artifacts.collect { [name:it.name,type:it.type,extension:it.extension,classifier:it.classifier] },
+                exclusions:dependency.excludeRules.collect { [group:it.group,module:it.module] }.sort { JsonOutput.toJson(it) }]
+        }
+        rows << [name:usage.name,attributes:attributes,dependencies:dependencies.sort { JsonOutput.toJson(it) },file:artifact.file.canonicalPath]
+    }
+    rows.sort { it.name }
+ }
+ def graph = { byte[] bytes ->
+    def xml = new XmlSlurper().parseText(new String(bytes,'UTF-8'))
+    def allowed = ['modelVersion','groupId','artifactId','version','packaging','name','description','url','inceptionYear',
+        'organization','licenses','developers','contributors','mailingLists','scm','issueManagement','ciManagement','properties','dependencies','prerequisites'] as Set
+    if (xml.children().any { !(it.name() in allowed) } || (xml.packaging.text() ?: 'jar') != 'jar') return null
+    def dependencies = []
+    for (dependency in xml.dependencies.dependency) {
+        if (dependency.children().any { !(it.name() in ['groupId','artifactId','version','scope','type','classifier','optional','exclusions']) }) return null
+        def row = [:]
+        for (key in ['groupId','artifactId','version','scope','type','classifier','optional']) {
+            def values = dependency.children().findAll { it.name() == key }
+            if (values.size() > 1) return null
+            def value = values.size() == 0 ? '' : values[0].text().trim()
+            if (value.contains('${') || value.contains('@{')) return null
+            row[key] = value ?: (key == 'scope' ? 'compile' : key == 'type' ? 'jar' : key == 'optional' ? 'false' : '')
+        }
+        if (!row.groupId || !row.artifactId || !row.version || !(row.optional in ['true','false'])) return null
+        if (dependency.exclusions.size() > 1 || dependency.exclusions.children().any { it.name() != 'exclusion' }) return null
+        def exclusions = []
+        for (exclusion in dependency.exclusions.exclusion) {
+            if (exclusion.children()*.name().sort() != ['artifactId','groupId']) return null
+            def values = [groupId:exclusion.groupId.text().trim(),artifactId:exclusion.artifactId.text().trim()]
+            if (values.values().any { !it || it.contains('${') || it.contains('@{') }) return null
+            exclusions << values
+        }
+        row.exclusions = exclusions.sort { JsonOutput.toJson(it) }
+        dependencies << row
+    }
+    [group:xml.groupId.text(),name:xml.artifactId.text(),version:xml.version.text(),dependencies:dependencies.sort { JsonOutput.toJson(it) }]
+ }
+ // This exact native block is validated, never inserted by the purifier.
+ def marker = '''  <!-- This module was also published with a richer model, Gradle metadata,  -->
+  <!-- which should be used instead. Do not delete the following line which  -->
+  <!-- is to indicate to Gradle or any Gradle module metadata file consumer  -->
+  <!-- that they should prefer consuming it instead. -->
+  <!-- do_not_remove: published-with-gradle-metadata -->
+'''
+ def preflight
+ preflight = {
+    records.each { record ->
+        guardState(record.finish)
+        if (record.finish.actions.size() != record.finishActions.size() || !record.finish.actions.withIndex().every { action,i -> action.is(record.finishActions[i]) } ||
+            record.finish.dependsOn.size() != record.finishDependencies.size() || !record.finish.dependsOn.every { d -> record.finishDependencies.any { it.is(d) } }) fail('metadata snapshot task changed')
+        if (gradle.taskGraph.hasTask(record.finish)) {
+            def dependencies = gradle.taskGraph.getDependencies(record.finish)
+            if (dependencies.size() != record.finishDependencies.size() || !dependencies.every { d -> record.finishDependencies.any { it.is(d) } }) fail('metadata snapshot task graph changed')
+        }
+        if (record.unsupported) return
+        def publication = record.publication
+        if (!isNativePublication(publication) || !owned.contains(publication) || !record.project.publishing.publications.findByName(name)?.is(publication) || !publication.component.is(record.component) ||
+            [publication.groupId,publication.artifactId,publication.version] != [record.descriptor.groupId,record.descriptor.artifactId,record.descriptor.version] ||
+            publication.publishBuildId || publication.isAlias()) fail('metadata publication binding changed')
+        mappingClean(publication)
+        if (!publication.pom.is(record.pom) || !publication.pom.xmlAction.is(record.xmlAction) ||
+            !field(record.xmlAction,'org.gradle.internal.MutableActionSet','actions').is(record.xmlActions)) fail('metadata POM actions changed')
+        if (componentModel(record.project,record.component,record.artifact) != record.componentModel) fail('native Java component changed')
+        def artifacts = publication.artifacts.toList()
+        if (artifacts.size() != 1 || artifacts[0].file.canonicalFile != record.artifact.file.canonicalFile || artifacts[0].classifier || artifacts[0].extension != 'jar') fail('metadata publication artifacts changed')
+        for (entry in record.tasks) {
+            guardState(entry.task)
+            if (entry.task.actions.size() != entry.actions.size() || !entry.task.actions.withIndex().every { action,i -> action.is(entry.actions[i]) } ||
+                entry.task.dependsOn.size() != entry.dependencies.size() || !entry.task.dependsOn.every { dependency -> entry.dependencies.any { it.is(dependency) } }) fail('metadata task actions or dependencies changed')
+            def action = entry.nativeAction
+            if (!field(action,'org.gradle.api.internal.project.taskfactory.StandardTaskAction','type').is(entry.task.getClass()) ||
+                field(action,'org.gradle.api.internal.project.taskfactory.StandardTaskAction','method') != entry.type.getDeclaredMethod(entry.method)) fail('native metadata task method binding changed')
+            if (gradle.taskGraph.hasTask(entry.task)) {
+                def dependencies = gradle.taskGraph.getDependencies(entry.task)
+                if (dependencies.size() != entry.graphDependencies.size() || !dependencies.every { d -> entry.graphDependencies.any { it.is(d) } }) fail('metadata task graph changed')
+            }
+        }
+        if (!record.metadata.publication.get().is(publication) || record.metadata.publications.get().size() != 1 ||
+            !record.metadata.publications.get()[0].is(publication) || record.metadata.outputFile.get().asFile.canonicalFile != record.moduleFile.canonicalFile ||
+            record.pomTask.destination.canonicalFile != record.markedPom.canonicalFile || !record.pomTask.pom.is(record.pom)) fail('metadata generator inputs changed')
+    }
+ }
+ engine.configure = { project, found, snapshot, directory, id ->
+    def descriptor = found.descriptor
+    def prefix = descriptor.artifactId + '-' + descriptor.version
+    def relative = descriptor.groupId.replace('.','/') + '/' + descriptor.artifactId + '/' + descriptor.version
+    def originalPom = new File(directory,relative+'/'+prefix+'.pom')
+    def jar = new File(directory,relative+'/'+prefix+'.jar')
+    def statusFile = new File(directory,'nix-support/legacy-native-metadata.json')
+    if (project.tasks.findByName('purifierLegacyMetadataSnapshot') != null) fail('reserved metadata snapshot task collision')
+    def finish = project.tasks.create('purifierLegacyMetadataSnapshot')
+    if (finish.getClass().name != 'org.gradle.api.DefaultTask_Decorated' || !finish.actions.isEmpty() || !finish.dependsOn.isEmpty()) fail('custom metadata snapshot task factory')
+    guardState(finish)
+    def artifact = found.task.configuration.allArtifacts.toList()[0]
+    def component = project.components.findByName('java')
+    def model = componentModel(project,component,artifact)
+    def record = [project:project,descriptor:descriptor,artifact:artifact,finish:finish,unsupported:model == null ? 'unsupported-component' : null]
+    def dependencies = [snapshot]
+    if (model != null) {
+        if (project.extensions.findByName('publishing')?.publications?.findByName(name) != null) fail('reserved metadata publication collision')
+        if (project.tasks.findByName('generateMetadataFileForPurifierLegacyMetadataPublication') != null ||
+            project.tasks.findByName('generatePomFileForPurifierLegacyMetadataPublication') != null) fail('reserved native metadata task collision')
+        project.pluginManager.apply('maven-publish')
+        pending = project
+        def publication
+        try { publication = project.publishing.publications.create(name,MavenPublication) }
+        finally { pending = null }
+        if (!owned.contains(publication)) {
+            if (!isNativePublication(publication)) fail('unsupported publication factory')
+            owned.add(publication)
+        }
+        if ([publication.groupId,publication.artifactId,publication.version] != [project.group.toString(),project.name,project.version.toString()] ||
+            publication.component != null || field(publication,'org.gradle.api.publish.maven.internal.publication.DefaultMavenPublication','populated') ||
+            !field(publication,'org.gradle.api.publish.maven.internal.publication.DefaultMavenPublication','mainArtifacts').isEmpty() || !publication.publishBuildId || publication.isAlias() ||
+            publication.pom.xmlAction.getClass().name != 'org.gradle.internal.MutableActionSet' || !publication.pom.xmlAction.isEmpty()) fail('custom metadata publication creation rules')
+        mappingClean(publication)
+        def method = publication.getClass().getMethod('withoutBuildIdentifier')
+        if (method.declaringClass.name != 'org.gradle.api.publish.maven.internal.publication.DefaultMavenPublication') fail('unsupported native metadata emission policy')
+        method.invoke(publication)
+        publication.from(component)
+        publication.groupId=descriptor.groupId;publication.artifactId=descriptor.artifactId;publication.version=descriptor.version
+        def metadata = project.tasks.getByName('generateMetadataFileForPurifierLegacyMetadataPublication')
+        def pomTask = project.tasks.getByName('generatePomFileForPurifierLegacyMetadataPublication')
+        guardState(metadata);guardState(pomTask)
+        def metadataActions = actions(metadata,GenerateModuleMetadata,'run')
+        def pomActions = actions(pomTask,GenerateMavenPom,'doGenerate')
+        if (!metadata.dependsOn.isEmpty() || !pomTask.dependsOn.isEmpty()) fail('custom generated metadata dependencies')
+        def moduleFile = new File(project.buildDir,'publications/'+name+'/module.json')
+        def markedPom = new File(project.buildDir,'publications/'+name+'/pom-default.xml')
+        if (metadata.outputFile.get().asFile.canonicalFile != moduleFile.canonicalFile || pomTask.destination.canonicalFile != markedPom.canonicalFile || !metadata.publication.get().is(publication)) fail('custom generated metadata output or publication')
+        metadata.publications.set([publication])
+        def vanillaPom = new File(project.buildDir,'purifier-legacy-metadata/java-component.pom')
+        Action<XmlProvider> bridge = { provider ->
+            def text = provider.asString()
+            vanillaPom.parentFile.mkdirs();vanillaPom.setText(text.toString(),'UTF-8')
+            text.replace(0,text.length(),originalPom.getText('UTF-8'))
+        } as Action<XmlProvider>
+        publication.pom.withXml(bridge)
+        pomTask.dependsOn(snapshot)
+        pomTask.inputs.file(originalPom).withPropertyName('purifierLegacyOriginalPom')
+        record += [publication:publication,component:component,componentModel:model,pom:publication.pom,
+            xmlAction:publication.pom.xmlAction,xmlActions:field(publication.pom.xmlAction,'org.gradle.internal.MutableActionSet','actions'),
+            metadata:metadata,pomTask:pomTask,moduleFile:moduleFile,markedPom:markedPom,vanillaPom:vanillaPom]
+        def jarTasks = artifact.buildDependencies.getDependencies(metadata).toList()
+        if (jarTasks.size() != 1 || jarTasks[0].getClass().name != 'org.gradle.api.tasks.bundling.Jar_Decorated') fail('unsupported Java artifact producer')
+        record.tasks = [[task:metadata,type:GenerateModuleMetadata,method:'run',nativeAction:metadataActions[0],dependencies:[],graphDependencies:jarTasks],
+            [task:pomTask,type:GenerateMavenPom,method:'doGenerate',nativeAction:pomActions[0],dependencies:[snapshot],graphDependencies:[snapshot]]]
+        record.tasks.each { entry ->
+            entry.task.doFirst { preflight() }
+            entry.actions=entry.task.actions.toList()
+        }
+        dependencies += [metadata,pomTask]
+    }
+    finish.dependsOn(*dependencies)
+    finish.doLast {
+        preflight()
+        def status=[version:1,capability:cap,group:descriptor.groupId,name:descriptor.artifactId,artifactVersion:descriptor.version,state:'unsupported',reason:record.unsupported ?: 'unsupported-pom-graph']
+        if (!record.unsupported) {
+            def original=originalPom.bytes
+            def marked=record.markedPom.getText('UTF-8')
+            def at=marked.indexOf(marker)
+            def graphOriginal=graph(original)
+            def graphNative=graph(record.vanillaPom.bytes)
+            def markerOnly=at >= 0 && (marked.substring(0,at)+marked.substring(at+marker.length())).getBytes('UTF-8').toList()==original.toList()
+            if (!markerOnly) status.reason='unsupported-marker-output'
+            else if (graphOriginal != null && graphOriginal==graphNative) {
+                def document=new JsonSlurper().parse(record.moduleFile)
+                if (document.formatVersion!='1.1' || [document.component.group,document.component.module,document.component.version] != [descriptor.groupId,descriptor.artifactId,descriptor.version] ||
+                    document.createdBy?.gradle?.containsKey('buildId') || !(document.variants instanceof List) || document.variants.size()!=2) fail('native generated metadata binding differs')
+                document.variants.each { variant ->
+                    if (!(variant.files instanceof List) || variant.files.size()!=1 || variant.files[0].name!=prefix+'.jar' || variant.files[0].url!=prefix+'.jar') fail('unsupported generated metadata artifacts')
+                    def data=jar.bytes;def file=variant.files[0]
+                    if (file.size!=data.length) fail('native generated metadata artifact size differs')
+                    ['md5','sha1','sha256','sha512'].each { algorithm ->
+                        def value=file[algorithm]
+                        if (!(value instanceof String) || value != MessageDigest.getInstance(algorithm.replace('sha','SHA-').toUpperCase()).digest(data).encodeHex().toString()) fail('native generated metadata artifact digest differs')
+                    }
+                }
+                new File(directory,relative+'/'+prefix+'.module').bytes=record.moduleFile.bytes
+                originalPom.bytes=record.markedPom.bytes
+                status.state='complete';status.reason=null
+                status.originalPomSha256=digest(original);status.pomSha256=digest(originalPom.bytes);status.moduleSha256=digest(record.moduleFile.bytes);status.jarSha256=digest(jar.bytes)
+            }
+        }
+        statusFile.parentFile.mkdirs();statusFile.setText(JsonOutput.prettyPrint(JsonOutput.toJson(status))+'\n','UTF-8')
+    }
+    finish.doFirst { preflight() }
+    record.finishDependencies=dependencies
+    record.finishActions=finish.actions.toList()
+    records.add(record)
+ }
+ gradle.taskGraph.whenReady { preflight() }
+ gradle.taskGraph.beforeTask { preflight() }

@@ -489,6 +489,14 @@ run_lock() {
   mapfile -t gradle_flags <"$work/gradle-flags.txt"
 
   echo "gradle-purifier: running the lock build in $work/build" >&2
+  local legacy_bindings='[]' legacy_metadata_capture=0
+  if [ -f "$lockfile" ]; then
+    legacy_bindings=$(jq -c '[.projects[] | .path as $path | .publications[] | select(.kind == "legacy-maven-upload") | {path:$path,publication:.}]' "$lockfile") \
+      || die "could not read existing legacy publication bindings"
+  fi
+  if [ ! -f "$lockfile" ] || [ "${relock:-}" = 1 ]; then
+    legacy_metadata_capture=1
+  fi
   if ! (
     cd "$work/build" || exit 1
     # Gradle's own HTTP client reaches only the recorder: a remote it
@@ -499,6 +507,8 @@ run_lock() {
     KONAN_DATA_DIR=$work/konan \
       GRADLE_USER_HOME=$work/gradle-home \
       GRADLE_PURIFIER_MODE=lock \
+      GRADLE_PURIFIER_LEGACY_PUBLICATIONS=$legacy_bindings \
+      GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE=$legacy_metadata_capture \
       GRADLE_PURIFIER_BUILD_ROOT=$work/build \
       GRADLE_PURIFIER_REPOSITORY=$base \
       GRADLE_PURIFIER_OUTPUT=$work/output \
@@ -736,6 +746,8 @@ publish_command() {
     [ -e "$package" ] || continue
     artifacts=$(jq --arg id "$(basename "$package")" --arg out "$(readlink -f "$package")" '. + {($id): $out}' <<<"$artifacts")
   done
+  python3 "$lib/validate-legacy-native-metadata.py" --release-lock "$release" "$lockfile" \
+    || die "required native legacy metadata is unavailable or invalid"
   [ $# -gt 0 ] || set -- publish
   # The init script disables the task that generates each publication's
   # Gradle module metadata, so Gradle does not publish its output, and

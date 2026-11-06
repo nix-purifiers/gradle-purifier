@@ -67,3 +67,14 @@ rejections, duplicate metadata and provided-input authority. The composition
 check also compares the projected JUnit 5.11.2 BOM metadata with the exact
 locked download. Retaining an imported BOM's metadata does not add it to the
 selected runtime components or fetch the artifacts named by its constraints.
+
+The Gradle 6.9.4 legacy Maven controls distinguish old typed POM-only locks
+from the native Java metadata protocol added on fresh capture or explicit
+relock. Native ownership tests cover creation callbacks, task actions and
+implicit graph edges; rich selectors remain unavailable to strict projection.
+An unsupported POM graph must still lock, test and produce its original raw
+JAR/POM, while strict projection and CLI publication fail before deployment.
+The provided-input control requires Gradle to reject a real competing version
+through projected native module constraints, and checks Maven's observed
+behavior separately. These are bounded profile controls, not a version range
+or a new catalog support point.

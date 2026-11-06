@@ -22,4 +22,9 @@ def collision(d):
 run('output-id-collision',collision,True)
 for name,value in [('unsafe-root-slash','../escape'),('unsafe-root-dotdot','..'),('unsafe-root-control','a'+chr(10)+'b')]:
  run(name,lambda d,value=value:d.__setitem__('rootProjectName',value),True)
+
+for label,capability in [('null',None),('wrong-kind',dict(kind='other',version=1)),('wrong-version',dict(kind='gradle-java-component',version=2)),('float-version',dict(kind='gradle-java-component',version=1.0)),('extra-key',dict(kind='gradle-java-component',version=1,available=True))]:
+ run('native-metadata-'+label,edit('nativeMetadata',capability),True)
+run('native-metadata-valid',edit('nativeMetadata',dict(kind='gradle-java-component',version=1)),False)
+run('old-typed-absent-native-metadata',lambda d:d['projects'][0]['publications'][0].pop('nativeMetadata',None),False)
 print('PUBLIC_LEGACY_SCHEMA_PASS',flush=True)

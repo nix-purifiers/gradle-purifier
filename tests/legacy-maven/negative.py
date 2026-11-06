@@ -85,19 +85,27 @@ cases={
  'missing-input':('', 'missing Nix publication input'),
  'changed-binding':('', 'publication binding changed'),
 }
+if publication.get('nativeMetadata'):
+ cases['foreign-prefix-jar']=('', 'invalid artifact prefix')
+ cases['noncanonical-module-digest']=('', 'variant artifact digest differs')
 if a.selected_cases:assert all(name in cases for name in a.selected_cases),a.selected_cases
 for name,(extra,rejection) in cases.items():
  if a.selected_cases and name not in a.selected_cases:continue
+ if publication.get('nativeMetadata') and name in ('unsupported-metadata','unmapped-parent'):rejection='invalid projected module metadata' if name=='unsupported-metadata' else 'missing Nix publication input'
  w=out/name;w.mkdir();project=w/'project';epoch.fixture(project,profile,sdk)
  with (project/'build.gradle').open('a') as f:f.write('\n'+extra+'\n')
  bindings=[dict(path=':',publication=publication)]
  if name=='changed-binding':bindings[0]['publication']=dict(publication,configuration='other')
  projection=a.publication.resolve()
- if name in ['unsupported-metadata','unmapped-parent']:
+ if name in ['unsupported-metadata','unmapped-parent','foreign-prefix-jar','noncanonical-module-digest']:
   projection=w/'projection';shutil.copytree(a.publication.resolve(),projection)
   for copied in [projection,*projection.rglob('*')]:copied.chmod(0o755 if copied.is_dir() else 0o644)
   if name=='unsupported-metadata':
    pom=next((projection/'repository').rglob('epoch-*.pom'));pom.with_suffix('.module').write_text('{}')
+  elif name=='foreign-prefix-jar':
+   jar=next((projection/'repository').rglob('epoch-*.jar'));prefix=jar.stem;jar.with_name('x'*len(prefix)+'-sources.jar').write_bytes(jar.read_bytes())
+  elif name=='noncanonical-module-digest':
+   module=next((projection/'repository').rglob('epoch-*.module'));document=json.loads(module.read_text());document['variants'][0]['files'][0]['sha256']='0'+document['variants'][0]['files'][0]['sha256'];module.write_text(json.dumps(document))
   else:
    catalogfile=projection/'catalog.json';catalog=json.loads(catalogfile.read_text());catalog['publications'].append(dict(group='fixture',name='parent',version='1.0'));catalogfile.write_text(json.dumps(catalog))
  env=dict(os.environ,JAVA_HOME=sdk['java11']['home'],GRADLE_USER_HOME=str(out/'gradle-home'),LEGACY_BINDINGS=json.dumps(bindings),NIX_PUBLICATION=str(a.publication.resolve()),NIX_REPOSITORY=str(w/'absent' if name=='missing-input' else projection/'repository'),NIX_CATALOG=str(projection/'catalog.json'),LEGACY_COMPANION=str(root/'nix/lib/legacy-maven.init.gradle'),GUARD_GRAPH=str(w/'graph.json'))

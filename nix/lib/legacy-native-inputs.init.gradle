@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: MIT
+// Complete native Upload inputs for the explicit Java component protocol.
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+def context = gradle.ext.purifierLegacyMaven
+def fail = { message -> throw new GradleException('gradle-purifier: native legacy publication ' + message) }
+def safe = { value -> value instanceof String && value ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*/ && !(value in ['.', '..']) }
+def sha256 = { file -> MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString() }
+context.nativeInputs = { descriptor, catalog ->
+    def primary = catalog.modules.findAll { it.group == descriptor.groupId && it.name == descriptor.artifactId && it.originalVersion == descriptor.version }
+    if (primary.size() != 1 || !(catalog.publications instanceof List)) fail('projection does not match locked publication')
+    def publications = catalog.publications
+    def keys = [] as Set
+    publications.each { publication ->
+        if (!(publication instanceof Map) || !['group','name','version'].every { safe(publication[it]) } ||
+            publication.version.endsWith('-SNAPSHOT') || !keys.add([publication.group,publication.name,publication.version])) fail('invalid publication closure')
+    }
+    if (!catalog.modules.every { module -> keys.contains([module.group,module.name,module.version]) }) fail('incomplete publication closure')
+    def root = publications.findAll { [it.group,it.name,it.version] == [primary[0].group,primary[0].name,primary[0].version] }
+    if (root.size() != 1) fail('root publication missing')
+    ([root[0]] + publications.findAll { !it.is(root[0]) }).collect { publication ->
+        def directory = new File(context.repository,"${publication.group.replace('.','/')}/${publication.name}/${publication.version}")
+        def prefix = "${publication.name}-${publication.version}".toString()
+        def pom = new File(directory,prefix+'.pom')
+        if (!pom.isFile()) fail('missing Nix publication input: POM')
+        def xml = new XmlSlurper().parse(pom)
+        def packaging = xml.packaging.text() ?: 'jar'
+        if (!(packaging in ['jar','pom'])) fail('unsupported native packaging')
+        def module = new File(directory,prefix+'.module')
+        def marker = pom.getText('UTF-8').contains('do_not_remove: published-with-gradle-metadata')
+        if (marker != module.isFile() || (publication.is(root[0]) && !marker)) fail('missing native module metadata or POM marker')
+        def artifacts = []
+        def referenced = [] as Set
+        if (module.isFile()) {
+            def document = new JsonSlurper().parse(module)
+            if (document.formatVersion != '1.1' || [document.component?.group,document.component?.module,document.component?.version] != [publication.group,publication.name,publication.version] ||
+                !(document.variants instanceof List) || document.variants.isEmpty()) fail('invalid projected module metadata')
+            document.variants.each { variant ->
+                if (variant.containsKey('available-at')) fail('unsupported redirected variant')
+                (variant.files ?: []).each { entry ->
+                    if (!(entry.name instanceof String) || entry.url != entry.name || !entry.name.startsWith(prefix) || entry.name.contains('/') || entry.name.contains('\\')) fail('unsupported variant artifact path')
+                    def file = new File(directory,entry.name)
+                    if (!file.isFile() || entry.size != file.length()) fail('variant artifact missing or size differs')
+                    ['md5','sha1','sha256','sha512'].each { algorithm ->
+                        def value = entry[algorithm]
+                        if (value != null && (!(value instanceof String) || value != MessageDigest.getInstance(algorithm.replace('sha','SHA-').toUpperCase()).digest(file.bytes).encodeHex().toString())) fail('variant artifact digest differs')
+                    }
+                    referenced.add(file.name)
+                }
+            }
+        }
+        directory.listFiles().sort { it.name }.each { file ->
+            if (!file.isFile()) fail('unsupported publication directory')
+            if (file.name == prefix+'.pom' || file.name ==~ /.*\.(md5|sha1|sha256|sha512)$/) return
+            def extension = file.name.endsWith('.jar') ? 'jar' : file.name == prefix+'.module' ? 'module' : null
+            if (extension == null) fail('unsupported publication artifact; refusing to discard metadata')
+            if (!(file.name == prefix+'.'+extension || file.name.startsWith(prefix+'-'))) fail('invalid artifact prefix')
+            def suffix = file.name.substring(prefix.length(),file.name.length()-extension.length()-1)
+            def classifier = suffix == '' ? null : suffix.startsWith('-') && safe(suffix.substring(1)) ? suffix.substring(1) : null
+            if (suffix != '' && classifier == null) fail('invalid artifact classifier')
+            artifacts << [file:file,extension:extension,classifier:classifier,sha256:sha256(file)]
+        }
+        if (!referenced.every { file -> artifacts.any { it.file.name == file } }) fail('unsupported variant file type')
+        def unclassified = artifacts.findAll { it.extension == 'jar' && !it.classifier }
+        if (packaging == 'jar' && unclassified.size() != 1) fail('missing primary JAR')
+        if (packaging == 'pom') artifacts.add(0,[file:pom,extension:'pom',classifier:null,sha256:sha256(pom)])
+        [module:publication+[packaging:packaging],pom:pom,artifacts:artifacts,strict:true]
+    }
+}

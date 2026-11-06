@@ -454,6 +454,8 @@ jobs:
           Path(os.environ['RUNNER_TEMP'],'gradle-legacy-proof/source-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files if Path(p).is_file()},indent=2))
           PYTHON
           nix build .#default --out-link "$RUNNER_TEMP/gradle-legacy-candidate"
+          nix build 'github:nix-purifiers/gradle-purifier/f8d27b4f00d539d5de764ada829ae492d349678b#default' \
+            --out-link "$RUNNER_TEMP/gradle-legacy-typed-baseline"
           nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk11_headless' 'nixpkgs#jdk17_headless' 'nixpkgs#maven' --no-link
           # shellcheck disable=SC2016
           nix eval --impure --json --expr '
@@ -501,6 +503,18 @@ jobs:
             --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/parent"
           python tests/legacy-maven/schema.py --project "$project" --output "$RUNNER_TEMP/gradle-legacy-proof/schema"
+          python tests/legacy-maven/native-metadata.py --gradle "$gradle" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/native-metadata"
+          python tests/legacy-maven/metadata-unavailable.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/metadata-unavailable"
+          python tests/legacy-maven/metadata-unavailable.py --case rich-selector \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/rich-selector-unavailable"
+          python tests/legacy-maven/typed-lock-compat.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --baseline-cli "$RUNNER_TEMP/gradle-legacy-typed-baseline/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/typed-lock-compat"
           python tests/legacy-maven/companion.py --project "$project" --gradle "$gradle" \
             --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
             --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/companion"

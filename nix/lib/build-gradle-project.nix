@@ -548,19 +548,27 @@ let
   };
 
   # Native Maven repository, without the per-project release directory layer.
-  publicationRepository = runCommand "${gradle.rootProjectName}-jvm-publications" { } ''
-    mkdir $out
-    ${lib.concatMapStrings
-      (package: ''
-        cp -r --no-preserve=mode ${package.maven}/. $out/
-        cp -r --no-preserve=mode ${package.localPublications}/. $out/
-      '')
-      (
-        builtins.filter (package: package.gradleProject.publications != [ ]) (builtins.attrValues packages)
-      )
-    }
-    rm -rf $out/nix-support
-  '';
+  publicationRepository =
+    runCommand "${gradle.rootProjectName}-jvm-publications" { nativeBuildInputs = [ python3 ]; }
+      ''
+        mkdir $out
+        ${lib.concatMapStrings
+          (package: ''
+            ${lib.concatMapStrings (
+              publication:
+              lib.optionalString (publication ? nativeMetadata) ''
+                ${python3}/bin/python ${./validate-legacy-native-metadata.py} ${package.maven} ${lib.escapeShellArg (builtins.toJSON publication)}
+              ''
+            ) package.gradleProject.publications}
+            cp -r --no-preserve=mode ${package.maven}/. $out/
+            cp -r --no-preserve=mode ${package.localPublications}/. $out/
+          '')
+          (
+            builtins.filter (package: package.gradleProject.publications != [ ]) (builtins.attrValues packages)
+          )
+        }
+        rm -rf $out/nix-support
+      '';
 
   # What `gradle-purifier publish` uploads: the Maven output of every
   # project with publications, by project id.
