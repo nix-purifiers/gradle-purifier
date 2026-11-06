@@ -17,7 +17,11 @@ a soft Maven request rather than becoming an invented strict constraint. `provid
 existing Nix composition producer through `--input`, preserves its exact hard
 POM reference and full projected closure, and compares competing-version
 Gradle/Maven behavior with direct consumers of the immutable projection. It
-does not invent strict Gradle module metadata.
+does not invent strict Gradle module metadata. In the measured conflict case,
+Gradle 6.9 selects a direct competing `9.9.9` and returns `0`, while Maven keeps
+the projected dependency and returns `42`. Both outcomes match direct consumers
+of the immutable projection. That parity proves faithful transport; this
+POM-only edge does not enforce Nix dependency authority under Gradle conflicts.
 
 The expected publication is independently built with the exact immutable
 `command.nix` packaged in the candidate CLI. Changing the live companion directory after building the CLI changes its
