@@ -513,6 +513,7 @@ jobs:
             ${{ runner.temp }}/gradle-56-proof/**/producer/settings.gradle
             ${{ runner.temp }}/gradle-56-proof/**/repository/**
             ${{ runner.temp }}/gradle-56-proof/**/lock-run/output/**
+            ${{ runner.temp }}/gradle-56-proof/**/payloads/**
 
   legacy-maven:
     runs-on: ubuntu-latest
