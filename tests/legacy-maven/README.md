@@ -87,3 +87,10 @@ disabled Test tasks establish no runtime role. Maven publish metadata and all
 strict projections/CLI publication on 5.6.4 are unsupported, including old
 locks without a metadata capability. Basic raw JAR/POM release remains usable.
 Native/pure JAR payloads match; ZIP timestamps can differ across those builds.
+
+For 5.6.4, the CLI selects basic capture from the unpacked native distribution's
+`--version` output. Its archive identity must agree with the exact basic profile.
+The internal init protocol `GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE=1` still
+means a metadata request and is rejected through the real common init on this
+profile. It is an internal protocol, not a public strict-capture CLI option.
+`guards-56.py` tests that path separately from direct helper-context rejection.
