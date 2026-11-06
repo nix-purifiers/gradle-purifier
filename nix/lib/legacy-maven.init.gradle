@@ -127,6 +127,24 @@ def projectedInputs = { descriptor ->
     }
 }
 def deployments = []
+def preflightRegistered = false
+def preflightDeployments = {
+    deployments.each { current ->
+        guardTask(current.owner)
+        if (current.owner.actions.size() != current.ownerActions.size() || !current.owner.actions.withIndex().every { action, i -> action.is(current.ownerActions[i]) } ||
+            current.owner.dependsOn.size() != current.ownerDependencies.size() || !current.owner.dependsOn.every { dependency -> current.ownerDependencies.any { it.is(dependency) } }) fail('Upload actions or dependencies changed before deployment')
+        guardTask(current.task)
+        if (current.task.actions.size() != current.taskActions.size() || !current.task.actions.withIndex().every { action, i -> action.is(current.taskActions[i]) } ||
+            current.task.dependsOn.size() != current.taskDependencies.size() || !current.task.dependsOn.every { dependency -> current.taskDependencies.any { it.is(dependency) } }) fail('deployment task actions or dependencies changed before deployment')
+        guardDeployer(current.target, current.frozen.pom)
+        if (current.task.repositories.size() != 1 || !current.task.repositories.withType(MavenDeployer).toList()[0].is(current.target) ||
+            !current.target.getRepository().is(current.repository) || !current.target.getSnapshotRepository().is(current.snapshot)) fail('deployment target changed')
+        def artifacts = current.configuration.allArtifacts.toList()
+        if (!current.task.configuration.is(current.configuration) || artifacts.size() != 1 || artifacts[0].file.canonicalFile != current.input.jar.canonicalFile ||
+            artifacts[0].name != current.input.module.name || artifacts[0].type != 'jar' || artifacts[0].extension != 'jar' || artifacts[0].classifier ||
+            !current.input.jar.isFile() || !current.input.pom.isFile() || !java.util.Arrays.equals(current.input.pom.bytes, current.frozen.bytes)) fail('publication inputs changed before deployment')
+    }
+}
 def configure
 configure = { project ->
     if (configured.containsKey(project.path)) return configured[project.path]?.descriptor
@@ -167,23 +185,22 @@ configure = { project ->
             owned.add(record)
             deployments.add(record)
         }
-        // Every generated upload checks the original source task too, so a
-        // graph-time custom action/predicate cannot publish just its dependency.
-        owned.each { record -> record.task.doFirst {
-            deployments.each { current ->
-                guardTask(current.owner)
-                if (current.owner.actions.size() != current.ownerActions.size() || !current.owner.actions.withIndex().every { action, i -> action.is(current.ownerActions[i]) } ||
-                    current.owner.dependsOn.size() != current.ownerDependencies.size() || !current.owner.dependsOn.every { dependency -> current.ownerDependencies.any { it.is(dependency) } }) fail('Upload actions or dependencies changed before deployment')
-                guardDeployer(current.target, current.frozen.pom)
-                if (current.task.repositories.size() != 1 || !current.task.repositories.withType(MavenDeployer).toList()[0].is(current.target) ||
-                    !current.target.getRepository().is(current.repository) || !current.target.getSnapshotRepository().is(current.snapshot)) fail('deployment target changed')
-                def artifacts = current.configuration.allArtifacts.toList()
-                if (!current.task.configuration.is(current.configuration) || artifacts.size() != 1 || artifacts[0].file.canonicalFile != current.input.jar.canonicalFile ||
-                    artifacts[0].name != current.input.module.name || artifacts[0].type != 'jar' || artifacts[0].extension != 'jar' || artifacts[0].classifier ||
-                    !current.input.jar.isFile() || !current.input.pom.isFile() || !java.util.Arrays.equals(current.input.pom.bytes, current.frozen.bytes)) fail('publication inputs changed before deployment')
-            }
-        } }
-        owned.each { record -> record.ownerActions = task.actions.toList(); record.ownerDependencies = task.dependsOn.toList() }
+        // Every preflight validates the complete deployment graph, including
+        // generated helpers that may otherwise skip their own task actions.
+        owned.each { record -> record.task.doFirst { preflightDeployments() } }
+        owned.each { record ->
+            record.ownerActions = task.actions.toList()
+            record.ownerDependencies = task.dependsOn.toList()
+            record.taskActions = record.task.actions.toList()
+            record.taskDependencies = record.task.dependsOn.toList()
+        }
+        if (!preflightRegistered) {
+            // Registered after build-script callbacks during projectsEvaluated:
+            // ordinary whenReady mutations fail before predicates or actions.
+            gradle.taskGraph.whenReady { preflightDeployments() }
+            gradle.taskGraph.beforeTask { preflightDeployments() }
+            preflightRegistered = true
+        }
     } else {
         if (project.tasks.findByName('purifierLegacySnapshot') != null) fail('reserved snapshot task collision')
         def snapshot = project.tasks.create('purifierLegacySnapshot', Upload)

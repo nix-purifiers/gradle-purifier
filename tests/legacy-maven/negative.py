@@ -5,7 +5,8 @@ import argparse, hashlib, importlib.util, json, os, shutil, subprocess, sys
 sys.dont_write_bytecode=True
 p=argparse.ArgumentParser()
 for k in ['project','publication','sdks','gradle','output']:p.add_argument('--'+k,type=Path,required=True)
-a=p.parse_args();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();sdk=json.loads(a.sdks.read_text());locked=json.loads((a.project/'gradle-purifier.lock.json').read_text());publication=next(x for x in locked['projects'][0]['publications'] if x.get('kind')=='legacy-maven-upload');rows=[]
+p.add_argument('--case',action='append',dest='selected_cases')
+a=p.parse_args();driverHash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();sdk=json.loads(a.sdks.read_text());locked=json.loads((a.project/'gradle-purifier.lock.json').read_text());publication=next(x for x in locked['projects'][0]['publications'] if x.get('kind')=='legacy-maven-upload');rows=[]
 spec=importlib.util.spec_from_file_location('epoch',root/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch);profile=next(x for x in json.loads((root/'tests/epoch-probes/profiles.json').read_text())['profiles'] if x['id']=='gradle-6.9.4')
 init=out/'guard.init.gradle';init.write_text('''import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
@@ -18,6 +19,21 @@ gradle.taskGraph.whenReady { graph -> new File(System.getenv('GUARD_GRAPH')).tex
 getter="uploadArchives.repositories.withType(org.gradle.api.artifacts.maven.MavenDeployer).toList()[0]"
 cases={
  'valid':('',None),
+ 'helper-before-task-disabled':("gradle.projectsEvaluated { gradle.taskGraph.beforeTask { t -> if(t.name=='purifierLegacyDeployInput1')t.enabled=false } }",'disabled Upload'),
+ 'helper-before-task-predicate':("gradle.projectsEvaluated { gradle.taskGraph.beforeTask { t -> if(t.name=='purifierLegacyDeployInput1')t.onlyIf { false } } }",'custom Upload predicates'),
+ 'helper-after-graph-first':("gradle.projectsEvaluated { gradle.taskGraph.whenReady { purifierLegacyDeployInput1.doFirst { file('HOOK_EXECUTED').text='bad' } } }",'deployment task actions or dependencies changed'),
+ 'helper-after-graph-disabled':("gradle.projectsEvaluated { gradle.taskGraph.whenReady { purifierLegacyDeployInput1.enabled=false } }",'disabled Upload'),
+ 'helper-after-graph-predicate':("gradle.projectsEvaluated { gradle.taskGraph.whenReady { purifierLegacyDeployInput1.onlyIf { file('HOOK_EXECUTED').text='bad';false } } }",'custom Upload predicates'),
+ 'helper-late-first':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.doFirst { file('HOOK_EXECUTED').text='bad' } }",'deployment task actions or dependencies changed'),
+ 'helper-late-last':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.doLast { file('HOOK_EXECUTED').text='bad' } }",'deployment task actions or dependencies changed'),
+ 'helper-replaced-actions':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.actions=[] }",'deployment task actions or dependencies changed'),
+ 'helper-late-dependency':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };gradle.taskGraph.whenReady { purifierLegacyDeployInput1.dependsOn unexpected }",'deployment task actions or dependencies changed'),
+ 'helper-late-predicate':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.onlyIf { file('HOOK_EXECUTED').text='bad';false } }",'custom Upload predicates'),
+ 'helper-late-disabled':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.enabled=false }",'disabled Upload'),
+ 'helper-late-configuration':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.configuration=configurations.archives }",'inputs changed before deployment'),
+ 'helper-late-artifact':("gradle.taskGraph.whenReady { artifacts.add('purifierLegacyInputArtifacts1',file('extra.jar')) { name='extra';type='jar';extension='jar' } }",'inputs changed before deployment'),
+ 'helper-late-repository':("gradle.taskGraph.whenReady { purifierLegacyDeployInput1.repositories.clear() }",'deployment target changed'),
+
  'unsupported-metadata':('', 'refusing to discard metadata'),
  'unmapped-parent':('', 'refusing to omit descriptors'),
  'custom-protocol-provider':("uploadArchives.repositories.mavenDeployer { addProtocolProviderJars([file('custom-provider.jar')]) }",'custom protocol providers'),
@@ -47,7 +63,9 @@ cases={
  'missing-input':('', 'missing Nix publication input'),
  'changed-binding':('', 'publication binding changed'),
 }
+if a.selected_cases:assert all(name in cases for name in a.selected_cases),a.selected_cases
 for name,(extra,rejection) in cases.items():
+ if a.selected_cases and name not in a.selected_cases:continue
  w=out/name;w.mkdir();project=w/'project';epoch.fixture(project,profile,sdk)
  with (project/'build.gradle').open('a') as f:f.write('\n'+extra+'\n')
  bindings=[dict(path=':',publication=publication)]
@@ -64,10 +82,12 @@ for name,(extra,rejection) in cases.items():
  cmd=['bash',str(a.gradle.resolve()),'--offline','--no-daemon','--init-script',str(init),'uploadArchives']
  with (w/'native.log').open('w') as log:r=subprocess.run(cmd,cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=180)
  text=(w/'native.log').read_text();rows.append(dict(case=name,command=cmd,exitCode=r.returncode,expectedRejection=rejection));(out/'report.json').write_text(json.dumps(rows,indent=2));print(name,r.returncode,flush=True)
- if rejection:assert r.returncode!=0 and rejection in text,text[-4000:];assert not (project/'repository').exists() and not (project/'HOOK_EXECUTED').exists()
+ if rejection:
+  assert r.returncode!=0 and rejection in text,text[-4000:];assert not (project/'repository').exists() and not (project/'HOOK_EXECUTED').exists()
+  if name.startswith('helper-before-task-'):assert ':purifierLegacyDeployInput1 SKIPPED' in text and ':uploadArchives FAILED' in text,text[-4000:]
  else:
   assert r.returncode==0,text[-4000:];assert json.loads((w/'graph.json').read_text())==[':purifierLegacyDeployInput1',':uploadArchives'];assert not (project/'build/classes').exists()
   for module in json.loads((a.publication/'catalog.json').read_text())['modules']:
    relative=Path(module['group'].replace('.','/'))/module['name']/module['version'];prefix=module['name']+'-'+module['version']
    for ext in ['jar','pom']:assert (project/'repository'/relative/(prefix+'.'+ext)).read_bytes()==(a.publication/'repository'/relative/(prefix+'.'+ext)).read_bytes()
-(out/'context.json').write_text(json.dumps(dict(profile=profile,sdks=sdk,nixPublication=str(a.publication.resolve()),companionSha256=hashlib.sha256((root/'nix/lib/legacy-maven.init.gradle').read_bytes()).hexdigest(),scope='Actual companion/native guards. Complete CLI+Nix lifecycle separately required.'),indent=2));print('NATIVE_PRODUCTION_GUARDS_PASS',flush=True)
+(out/'context.json').write_text(json.dumps(dict(driverSha256=driverHash,selectedCases=a.selected_cases,profile=profile,sdks=sdk,nixPublication=str(a.publication.resolve()),companionSha256=hashlib.sha256((root/'nix/lib/legacy-maven.init.gradle').read_bytes()).hexdigest(),scope='Actual companion/native guards. Complete CLI+Nix lifecycle separately required.'),indent=2));print('NATIVE_PRODUCTION_GUARDS_PASS',flush=True)
