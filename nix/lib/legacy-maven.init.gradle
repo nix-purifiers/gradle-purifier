@@ -39,9 +39,38 @@ def guardDeployer = { deployer, expectedPom ->
     def filters = deployer.activePomFilters.toList()
     if (filters.size() != 1 || filters[0].name != 'default' || !filters[0].filter.is(PublishFilter.ALWAYS_ACCEPT)) fail('custom POM filters are unsupported')
 }
+def guardInitialActions = { task, original ->
+    def actions = task.actions.toList()
+    def standardType = 'org.gradle.api.internal.project.taskfactory.StandardTaskAction'
+    def wrapperType = 'org.gradle.api.internal.AbstractTask$TaskActionWrapper'
+    if (actions.collect { it.getClass().name } != (original ? [wrapperType, standardType] : [standardType])) fail('custom Upload actions are unsupported')
+    def action = actions.last()
+    if (!privateField(action, standardType, 'type').is(task.getClass()) ||
+        privateField(action, standardType, 'method') != Upload.getDeclaredMethod('upload')) fail('unsupported native Upload action binding')
+    if (original) {
+        def delegate = privateField(actions[0], wrapperType, 'action')
+        def type = delegate.getClass()
+        def nativeType = org.gradle.api.plugins.BasePlugin
+        def nativeSource = nativeType.protectionDomain.codeSource?.location
+        // JVM-generated lambda numbers are unstable. Bind the native warning
+        // to its host, loader, code source and captured native field types.
+        if (!type.synthetic || !type.name.startsWith('org.gradle.api.plugins.BasePlugin$$Lambda$') ||
+            !type.classLoader.is(nativeType.classLoader) || nativeSource == null ||
+            type.protectionDomain.codeSource?.location != nativeSource ||
+            type.declaredFields*.type != [java.util.concurrent.atomic.AtomicBoolean]) fail('custom Upload warning action is unsupported')
+    }
+}
 def guardTask = { task ->
     if (task.getClass().name != 'org.gradle.api.tasks.Upload_Decorated') fail('unsupported Upload implementation')
     if (!task.enabled) fail('disabled Upload is unsupported')
+    def finalizers = task.getFinalizedBy()
+    def dependencyType = 'org.gradle.api.internal.tasks.DefaultTaskDependency'
+    if (finalizers.getClass().name != dependencyType) fail('unsupported Upload finalizer implementation')
+    // Inspect raw storage without evaluating user dependency closures.
+    def immutable = privateField(finalizers, dependencyType, 'immutableValues')
+    def mutable = privateField(finalizers, dependencyType, 'mutableValues')
+    if (immutable.getClass().name != 'com.google.common.collect.RegularImmutableSet' || !immutable.isEmpty() ||
+        (mutable != null && (mutable.getClass().name != dependencyType + '$TaskDependencySet' || !mutable.isEmpty()))) fail('custom Upload finalizers are unsupported')
     if (task.onlyIf.getClass().name != 'org.gradle.api.specs.AndSpec' || task.onlyIf.specs.size() != 1 ||
         task.onlyIf.specs[0].getClass().name != 'org.gradle.api.internal.AbstractTask$8') fail('custom Upload predicates are unsupported')
 }
@@ -53,7 +82,7 @@ def inspect = { project ->
     if (task.repositories.isEmpty()) return null
     guardTask(task)
     if (!task.dependsOn.isEmpty()) fail('custom Upload dependencies are unsupported')
-    if (task.actions.collect { it.getClass().name } != ['org.gradle.api.internal.AbstractTask$TaskActionWrapper', 'org.gradle.api.internal.project.taskfactory.StandardTaskAction']) fail('custom Upload actions are unsupported')
+    guardInitialActions(task, true)
     def deployers = task.repositories.withType(MavenDeployer).toList()
     if (deployers.size() != 1 || task.repositories.size() != 1) fail('requires exactly one MavenDeployer')
     def deployer = deployers[0]
@@ -136,6 +165,10 @@ def preflightDeployments = {
         guardTask(current.task)
         if (current.task.actions.size() != current.taskActions.size() || !current.task.actions.withIndex().every { action, i -> action.is(current.taskActions[i]) } ||
             current.task.dependsOn.size() != current.taskDependencies.size() || !current.task.dependsOn.every { dependency -> current.taskDependencies.any { it.is(dependency) } }) fail('deployment task actions or dependencies changed before deployment')
+        if (gradle.taskGraph.hasTask(current.task)) {
+            def dependencies = gradle.taskGraph.getDependencies(current.task)
+            if (dependencies.size() != current.graphDependencies.size() || !dependencies.every { dependency -> current.graphDependencies.any { it.is(dependency) } }) fail('Upload task graph dependencies changed before deployment')
+        }
         guardDeployer(current.target, current.frozen.pom)
         if (current.task.repositories.size() != 1 || !current.task.repositories.withType(MavenDeployer).toList()[0].is(current.target) ||
             !current.target.getRepository().is(current.repository) || !current.target.getSnapshotRepository().is(current.snapshot)) fail('deployment target changed')
@@ -172,7 +205,15 @@ configure = { project ->
             def configurationName = index == 0 ? 'purifierLegacyArtifacts' : "purifierLegacyInputArtifacts${index}"
             def taskName = "purifierLegacyDeployInput${index}"
             if (project.configurations.findByName(configurationName) != null || (index != 0 && project.tasks.findByName(taskName) != null)) fail('reserved publication task/configuration collision')
-            if (index != 0) deployment = project.tasks.create(taskName, Upload)
+            if (index != 0) {
+                deployment = project.tasks.create(taskName, Upload)
+                // Task rules have already run at creation. Validate native
+                // defaults before adding purifier inputs or accepting baselines.
+                guardTask(deployment)
+                guardInitialActions(deployment, false)
+                if (!deployment.dependsOn.isEmpty()) fail('custom Upload dependencies are unsupported')
+                if (deployment.configuration != null || !deployment.repositories.isEmpty()) fail('custom generated Upload configuration or repositories are unsupported')
+            }
             def configuration = project.configurations.create(configurationName)
             project.artifacts.add(configuration.name, input.jar) { artifact -> artifact.name = input.module.name; artifact.type = 'jar'; artifact.extension = 'jar'; artifact.classifier = null }
             deployment.configuration = configuration
@@ -193,6 +234,7 @@ configure = { project ->
             record.ownerDependencies = task.dependsOn.toList()
             record.taskActions = record.task.actions.toList()
             record.taskDependencies = record.task.dependsOn.toList()
+            record.graphDependencies = record.task.is(task) ? owned.findAll { !it.task.is(task) }*.task : []
         }
         if (!preflightRegistered) {
             // Registered after build-script callbacks during projectsEvaluated:

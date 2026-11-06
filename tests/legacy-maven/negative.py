@@ -19,6 +19,21 @@ gradle.taskGraph.whenReady { graph -> new File(System.getenv('GUARD_GRAPH')).tex
 getter="uploadArchives.repositories.withType(org.gradle.api.artifacts.maven.MavenDeployer).toList()[0]"
 cases={
  'valid':('',None),
+ 'helper-early-first':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.doFirst { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
+ 'helper-early-last':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.doLast { file('HOOK_EXECUTED').text='bad' } }",'custom Upload actions'),
+ 'helper-early-dependency':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.dependsOn unexpected }",'custom Upload dependencies'),
+ 'helper-early-input-dependency':("task unexpected { outputs.file(file('custom-output'));doLast { file('HOOK_EXECUTED').text='bad';file('custom-output').text='x' } };tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.inputs.files(unexpected) }",'Upload task graph dependencies changed'),
+ 'owner-input-dependency':("task unexpected { outputs.file(file('custom-output'));doLast { file('HOOK_EXECUTED').text='bad';file('custom-output').text='x' } };uploadArchives.inputs.files(unexpected)",'Upload task graph dependencies changed'),
+ 'helper-early-finalizer':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.finalizedBy unexpected }",'custom Upload finalizers'),
+ 'owner-finalizer':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };uploadArchives.finalizedBy unexpected",'custom Upload finalizers'),
+ 'helper-late-finalizer':("task unexpected { doLast { file('HOOK_EXECUTED').text='bad' } };gradle.taskGraph.whenReady { purifierLegacyDeployInput1.finalizedBy unexpected }",'custom Upload finalizers'),
+ 'helper-early-disabled':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.enabled=false }",'disabled Upload'),
+ 'helper-early-predicate':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.onlyIf { file('HOOK_EXECUTED').text='bad';false } }",'custom Upload predicates'),
+ 'helper-early-configuration':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.configuration=configurations.archives }",'custom generated Upload configuration'),
+ 'helper-early-repository':("tasks.withType(org.gradle.api.tasks.Upload).all { t -> if(t.name=='purifierLegacyDeployInput1') t.repositories.mavenDeployer { repository(url:uri('unexpected-repository')) } }",'custom generated Upload configuration or repositories'),
+ 'typed-owner-replacement':("afterEvaluate { uploadArchives.actions.remove(0);uploadArchives.doFirst({ t -> file('HOOK_EXECUTED').text='bad' } as org.gradle.api.Action) }",'custom Upload warning action'),
+ 'owner-action-method':("afterEvaluate { def action=uploadArchives.actions.last();def field=action.getClass().getDeclaredField('method');field.accessible=true;field.set(action,org.gradle.api.tasks.Upload.getDeclaredMethod('isUploadDescriptor')) }",'unsupported native Upload action binding'),
+
  'helper-before-task-disabled':("gradle.projectsEvaluated { gradle.taskGraph.beforeTask { t -> if(t.name=='purifierLegacyDeployInput1')t.enabled=false } }",'disabled Upload'),
  'helper-before-task-predicate':("gradle.projectsEvaluated { gradle.taskGraph.beforeTask { t -> if(t.name=='purifierLegacyDeployInput1')t.onlyIf { false } } }",'custom Upload predicates'),
  'helper-after-graph-first':("gradle.projectsEvaluated { gradle.taskGraph.whenReady { purifierLegacyDeployInput1.doFirst { file('HOOK_EXECUTED').text='bad' } } }",'deployment task actions or dependencies changed'),
@@ -83,7 +98,7 @@ for name,(extra,rejection) in cases.items():
  with (w/'native.log').open('w') as log:r=subprocess.run(cmd,cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=180)
  text=(w/'native.log').read_text();rows.append(dict(case=name,command=cmd,exitCode=r.returncode,expectedRejection=rejection));(out/'report.json').write_text(json.dumps(rows,indent=2));print(name,r.returncode,flush=True)
  if rejection:
-  assert r.returncode!=0 and rejection in text,text[-4000:];assert not (project/'repository').exists() and not (project/'HOOK_EXECUTED').exists()
+  assert r.returncode!=0 and rejection in text,text[-4000:];assert not (project/'repository').exists() and not (project/'unexpected-repository').exists() and not (project/'HOOK_EXECUTED').exists()
   if name.startswith('helper-before-task-'):assert ':purifierLegacyDeployInput1 SKIPPED' in text and ':uploadArchives FAILED' in text,text[-4000:]
  else:
   assert r.returncode==0,text[-4000:];assert json.loads((w/'graph.json').read_text())==[':purifierLegacyDeployInput1',':uploadArchives'];assert not (project/'build/classes').exists()
