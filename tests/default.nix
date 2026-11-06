@@ -110,6 +110,15 @@ let
     '';
 in
 {
+  sdk-source-capture-unit =
+    runCommand "sdk-source-capture-unit" { nativeBuildInputs = [ pkgs.python3 ]; }
+      ''
+        mkdir -p tests/sdk-sources nix/lib
+        cp ${./sdk-sources/test_capture.py} tests/sdk-sources/test_capture.py
+        cp ${../nix/lib/capture-project-jdks.py} nix/lib/capture-project-jdks.py
+        PYTHONDONTWRITEBYTECODE=1 python3 -B tests/sdk-sources/test_capture.py
+        touch $out
+      '';
   runtime-metadata-unit =
     runCommand "runtime-metadata-unit" { nativeBuildInputs = [ pkgs.python3 ]; }
       ''

@@ -56,6 +56,7 @@ let
     "build.gradle.kts"
     "gradle.properties"
     "gradle-wrapper.properties"
+    "gradle-purifier.sdks.json"
   ];
   # The lockfiles of Gradle's dependency locking are gradle.lockfile, and
   # <name>-gradle.lockfile for the settings, the build scripts and the

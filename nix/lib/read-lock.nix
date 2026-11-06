@@ -75,6 +75,7 @@ let
   isSdk =
     sdk:
     isAttrs sdk
+    && !(sdk ? resolver || sdk ? selectionKind || sdk ? identityVersion || sdk ? flakeLock)
     && isSdkSource (sdk.source or null)
     && isList (sdk.attribute or null)
     && sdk.attribute != [ ]
@@ -108,13 +109,140 @@ let
       )
       || (role.provenance or null == "native-effective-fork-options" && role.role == "launcher")
     );
+  keysAre =
+    value: keys: isAttrs value && builtins.attrNames value == builtins.sort builtins.lessThan keys;
+  isExplicitSdkSource =
+    source:
+    keysAre source [
+      "type"
+      "owner"
+      "repo"
+      "rev"
+      "narHash"
+    ]
+    && source.type == "github"
+    &&
+      lib.all
+        (
+          key:
+          isString source.${key}
+          && match "[A-Za-z0-9_.-]+" source.${key} != null
+          && !(builtins.elem source.${key} [
+            "."
+            ".."
+          ])
+        )
+        [
+          "owner"
+          "repo"
+        ]
+    && isString source.rev
+    && match "[0-9a-f]{40}" source.rev != null
+    && isString source.narHash
+    && match "sha256-[A-Za-z0-9+/]{43}=" source.narHash != null;
+  isSourceLock =
+    value:
+    isAttrs value
+    && (
+      (keysAre value [ "state" ] && value.state == "absent-no-external-inputs")
+      || (
+        keysAre value [
+          "state"
+          "sha256"
+        ]
+        && value.state == "present"
+        && isIdentityHash value.sha256
+      )
+    );
+  isExplicitSdk =
+    sdk:
+    keysAre sdk [
+      "id"
+      "resolver"
+      "source"
+      "system"
+      "selectionKind"
+      "attribute"
+      "output"
+      "home"
+      "identityVersion"
+      "identityHash"
+      "flakeLock"
+    ]
+    && isString sdk.id
+    && match "[A-Za-z0-9_-]+" sdk.id != null
+    && sdk.resolver == "immutable-flake-attribute-v1"
+    && isExplicitSdkSource sdk.source
+    && sdk.system == "x86_64-linux"
+    && builtins.elem sdk.selectionKind [
+      "derivation-v1"
+      "jvm-sdk-adapter-v1"
+    ]
+    && isList sdk.attribute
+    && sdk.attribute != [ ]
+    && lib.all (x: isString x && x != "") sdk.attribute
+    && isString sdk.output
+    && lib.hasPrefix "/nix/store/" sdk.output
+    && isString sdk.home
+    && lib.hasPrefix "/nix/store/" sdk.home
+    && sdk.identityVersion == "sdk-output-home-context-v1"
+    && isIdentityHash sdk.identityHash
+    && isSourceLock sdk.flakeLock;
+  isExplicitManager =
+    manager:
+    keysAre manager [
+      "version"
+      "sdk"
+      "executable"
+      "runtimeHome"
+      "identityHash"
+    ]
+    && manager.version == "jvm-manager-executable-runtime-home-v1"
+    && isIdentityHash manager.sdk
+    && isIdentityHash manager.identityHash
+    && isString manager.executable
+    && lib.hasPrefix "/nix/store/" manager.executable
+    && isString manager.runtimeHome
+    && lib.hasPrefix "/nix/store/" manager.runtimeHome;
+  isExplicitSdkRole =
+    role:
+    keysAre role [
+      "task"
+      "role"
+      "sdk"
+      "provenance"
+    ]
+    && isSdkRole role;
+  isExplicitSdkContext =
+    context:
+    keysAre context [
+      "version"
+      "declarationHash"
+      "sdks"
+      "manager"
+      "roles"
+    ]
+    && context.version == "jvm-sdk-context-v2"
+    && isIdentityHash context.declarationHash
+    && isList context.sdks
+    && context.sdks != [ ]
+    && lib.all isExplicitSdk context.sdks
+    && isExplicitManager context.manager
+    && isList context.roles
+    && lib.all isExplicitSdkRole context.roles;
   isSdkContext =
     context:
     isAttrs context
-    && isList (context.sdks or null)
-    && lib.all isSdk context.sdks
-    && isList (context.roles or null)
-    && lib.all isSdkRole context.roles;
+    && (
+      if context ? version then
+        isExplicitSdkContext context
+      else
+        !(context ? manager || context ? declarationHash)
+        && isList (context.sdks or null)
+        && lib.all isSdk context.sdks
+        && isList (context.roles or null)
+        && lib.all isSdkRole context.roles
+    );
   sdkContextProblem =
     context:
     if !isSdkContext context then
@@ -134,15 +262,51 @@ let
         "has duplicate project SDK identities"
       else if builtins.length roleKeys != builtins.length (lib.unique roleKeys) then
         "has duplicate project SDK task roles"
+      else if
+        context ? version
+        && (
+          !(builtins.elem context.manager.sdk ids)
+          ||
+            builtins.length (map (sdk: sdk.id) context.sdks)
+            != builtins.length (lib.unique (map (sdk: sdk.id) context.sdks))
+          ||
+            builtins.length (map (sdk: sdk.home) context.sdks)
+            != builtins.length (lib.unique (map (sdk: sdk.home) context.sdks))
+        )
+      then
+        "has an absent manager or ambiguous declared SDKs"
       else if !(lib.all (role: builtins.elem role.sdk ids) context.roles) then
         "has a project SDK role referencing an unknown SDK identity"
       else
         null;
+  hasExplicitSdkContext =
+    isAttrs (raw.projectJdks or null)
+    && lib.any (context: isAttrs context && (context.version or null) == "jvm-sdk-context-v2") (
+      builtins.attrValues raw.projectJdks
+    );
+  # Only path values and context-bearing store trees are inspected here.
+  # Preserve the old lazy behavior for derivation outputs and raw strings.
+  readableSdkDeclaration =
+    builtins.isPath src
+    || (
+      isString src
+      && lib.hasPrefix "${builtins.storeDir}/" src
+      && builtins.getContext src != { }
+      && lib.all (entry: !(entry ? outputs || entry ? allOutputs)) (
+        builtins.attrValues (builtins.getContext src)
+      )
+    );
+  hasSdkDeclaration =
+    readableSdkDeclaration && builtins.pathExists (src + "/gradle-purifier.sdks.json");
   projectJdkProblem =
-    if !(raw ? projectJdks) then
+    if hasSdkDeclaration && !hasExplicitSdkContext then
+      "has an SDK declaration without a versioned manager context"
+    else if !(raw ? projectJdks) then
       null
     else if !isAttrs raw.projectJdks then
       "has malformed project SDK contexts"
+    else if hasExplicitSdkContext && builtins.attrNames raw.projectJdks != [ "x86_64-linux" ] then
+      "has unsupported or mixed explicit SDK execution contexts"
     else
       lib.findFirst (message: message != null) null (
         map sdkContextProblem (builtins.attrValues raw.projectJdks)
@@ -438,7 +602,7 @@ let
 
   stale =
     usable
-    && builtins.isPath src
+    && (builtins.isPath src || hasExplicitSdkContext)
     &&
       import ./inputs.nix {
         inherit lib src;

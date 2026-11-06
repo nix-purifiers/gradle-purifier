@@ -161,7 +161,37 @@ tree_path() {
 # The hash of the build definition at the build root with the gradle
 # arguments of the JSON list $1, as nix/lib/inputs.nix computes it; the
 # builder computes it the same way.
+# Source mode has a separate pure command path. The original entry points
+# retain their argument and identity meanings for undeclared projects.
+source_sdk_mode() {
+  [ -f "$root/gradle-purifier.sdks.json" ] || {
+    [ -f "$lockfile" ] && jq -e '[.projectJdks // {} | .[] | .version == "jvm-sdk-context-v2"] | any' "$lockfile" >/dev/null 2>&1
+  }
+}
+
+sdk_source_command() {
+  python3 "$lib/project-sdk-sources.py" "$@" --helper "$purifier_source" --nixpkgs "$nixpkgs"
+}
+
+pure_project_snapshot() {
+  mkdir -p "$state"
+  copy_build "$state/pure-project"
+}
+
+selected_java_home() {
+  if source_sdk_mode; then
+    jq -er '.launchHome' "$sdk_context"
+  else
+    jdk_home "$1"
+  fi
+}
+
 inputs_hash() {
+  if source_sdk_mode; then
+    pure_project_snapshot
+    sdk_source_command hash --project "$state/pure-project" --arguments "$1"
+    return
+  fi
   nix-instantiate --eval --strict --json \
     --expr "{ src, args }: import $lib/inputs.nix { lib = (import $nixpkgs { }).lib; src = /. + src; gradleArguments = builtins.fromJSON args; }" \
     --argstr src "$root" --argstr args "$1" | jq -r .
@@ -300,6 +330,9 @@ lock_command() {
 
   local args_json current
   args_json=$(jq -n -c '$ARGS.positional' --args -- "${gradle_args[@]}")
+  if [ -f "$root/gradle-purifier.sdks.json" ] && [ -n "$java_major" ]; then
+    die "--java cannot be combined with gradle-purifier.sdks.json; select the manager in the declaration"
+  fi
   current=$(inputs_hash "$args_json")
   if [ -z "$relock" ] && [ -f "$lockfile" ] \
     && jq -e --argjson version "$lock_version" --arg current "$current" \
@@ -359,6 +392,9 @@ update_command() {
   mkdir -p "$state"
   : >"$state/pinned.tsv"
   update_args=()
+  if [ -f "$root/gradle-purifier.sdks.json" ] && [ -n "$java_major" ]; then
+    die "--java cannot be combined with gradle-purifier.sdks.json; select the manager in the declaration"
+  fi
   if [ ${#packages[@]} -gt 0 ]; then
     pinned_listings "${packages[@]}" >"$state/pinned.tsv"
     if uses_dependency_locking; then
@@ -458,7 +494,20 @@ run_lock() {
   local records=$work/records.tsv
   printf '%s\t%s\t%s\n' "$(tree_path "$url")" "$url" "$dist_hash" >"$records"
   local java
-  java=$(java_home "$java_major")
+  local source_context='' source_capture_args=() source_environment=() source_native_args=()
+  if [ -f "$root/gradle-purifier.sdks.json" ]; then
+    source_context=$(sdk_source_command preflight --declaration "$root/gradle-purifier.sdks.json" --root "$state/project-sdk-source-context")
+    java=$(jq -er '.launchHome' "$source_context")
+    source_capture_args=(--source-context "$source_context")
+    source_environment=("GRADLE_PURIFIER_JDK_CONTEXT=$source_context")
+    local discovery_configuration
+    discovery_configuration=$("$default_java/bin/java" "$lib/SdkDiscoveryProperties.java" "$root/gradle.properties" "$work/gradle-home/gradle.properties" -- "${gradle_args[@]}")
+    if [ "$discovery_configuration" = absent ]; then
+      source_native_args=("-Porg.gradle.java.installations.paths=$(jq -r '.paths | join(",")' "$source_context")" -Porg.gradle.java.installations.auto-detect=false)
+    fi
+  else
+    java=$(java_home "$java_major")
+  fi
   # Empty jdk.http.auth.*.disabledSchemes let the recorder send the Basic
   # credentials of an https_proxy URL to the proxy, for HTTPS tunnels and
   # for plain HTTP alike.
@@ -520,17 +569,18 @@ run_lock() {
     # lock would miss fails here rather than in the sandbox. The HTTPS
     # proxy is the recorder's tunnel, which reaches Kotlin/Native's
     # download host and refuses every other.
-    KONAN_DATA_DIR=$work/konan \
-      GRADLE_USER_HOME=$work/gradle-home \
+    env "${source_environment[@]}" \
+      "KONAN_DATA_DIR=$work/konan" \
+      "GRADLE_USER_HOME=$work/gradle-home" \
       GRADLE_PURIFIER_MODE=lock \
-      GRADLE_PURIFIER_LEGACY_PUBLICATIONS=$legacy_bindings \
-      GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE=$legacy_metadata_capture \
-      GRADLE_PURIFIER_BUILD_ROOT=$work/build \
-      GRADLE_PURIFIER_REPOSITORY=$base \
-      GRADLE_PURIFIER_OUTPUT=$work/output \
-      GRADLE_PURIFIER_RESOURCES=$lockfile \
-      GRADLE_PURIFIER_RESOURCE_REFRESH=${resource_refresh:-} \
-      JAVA_HOME=$java \
+      "GRADLE_PURIFIER_LEGACY_PUBLICATIONS=$legacy_bindings" \
+      "GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE=$legacy_metadata_capture" \
+      "GRADLE_PURIFIER_BUILD_ROOT=$work/build" \
+      "GRADLE_PURIFIER_REPOSITORY=$base" \
+      "GRADLE_PURIFIER_OUTPUT=$work/output" \
+      "GRADLE_PURIFIER_RESOURCES=$lockfile" \
+      "GRADLE_PURIFIER_RESOURCE_REFRESH=${resource_refresh:-}" \
+      "JAVA_HOME=$java" \
       "$gradle_home/bin/gradle" \
       --init-script "$lib/purifier.init.gradle" \
       --init-script "$lib/task-jdks.init.gradle" \
@@ -542,7 +592,7 @@ run_lock() {
       -Porg.gradle.java.installations.auto-download=false \
       -Pkotlin.compiler.execution.strategy=in-process \
       "${gradle_args[@]}" "${update_args[@]}" "${gradle_flags[@]}" \
-      purifierLock </dev/null 2>&1 | tee "$work/gradle.log"
+      "${source_native_args[@]}" purifierLock </dev/null 2>&1 | tee "$work/gradle.log"
   ); then
     # The lock serves the version listings of the lockfile, so a dynamic
     # version resolves as it did; a build that now asks for a version the
@@ -569,7 +619,7 @@ run_lock() {
   # A large build locks more than fits in one argument, so the artifacts
   # go to jq as a file.
   artifacts_json "$records" >"$work/artifacts.json"
-  python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json"
+  python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json" "${source_capture_args[@]}"
   if [ -d "$work/output/external-resources" ]; then
     jq -s 'add | sort_by(.build, .task, .linkUrl)' "$work/output/external-resources/"*.json >"$work/resources.json"
   else
@@ -615,6 +665,14 @@ run_lock() {
 build_attr() {
   mkdir -p "$state"
   local out
+  if source_sdk_mode; then
+    pure_project_snapshot
+    if ! out=$(sdk_source_command build --project "$state/pure-project" --lock "$lockfile" --attribute "$1" --root "$state/$1"); then
+      die "pure Nix could not build the $1 of $lockfile; restore the declared SDK sources or relock"
+    fi
+    printf '%s' "$out" | tail -n 1
+    return
+  fi
   if ! out=$(nix-build --quiet "$lib/command.nix" \
     --argstr nixpkgs "$nixpkgs" --argstr purifierSource "$purifier_source" \
     --argstr src "$root" --argstr lockFile "$lockfile" \
@@ -664,10 +722,18 @@ prefetch_command() {
 
   # ./gradlew finds the distribution installed where it looks for it.
   local user_home=${GRADLE_USER_HOME:-$HOME/.gradle}
-  local wrapper_jar paths dist_dir zip
+  local wrapper_jar paths dist_dir zip wrapper_java wrapper_paths
   wrapper_jar=$(find "$distribution/lib" -maxdepth 1 -name 'gradle-wrapper-shared-*.jar' | head -n 1)
   if [ -n "$wrapper_jar" ] && [ -f gradle/wrapper/gradle-wrapper.properties ]; then
-    mapfile -t paths < <("$(jdk_home "$jdk")/bin/java" -cp "$wrapper_jar" "$lib/WrapperDistribution.java" "$user_home" "$root")
+    wrapper_java=$(selected_java_home "$jdk")
+    if source_sdk_mode && [ "$(jq -r '.javaMajor' "$lockfile")" -lt 11 ]; then
+      # Source-file launch is a helper capability, independent of the actual
+      # project manager. Older managers retain their exact native identity.
+      wrapper_java=$default_java
+    fi
+    wrapper_paths=$("$wrapper_java/bin/java" -cp "$wrapper_jar" "$lib/WrapperDistribution.java" "$user_home" "$root") \
+      || die "could not determine native wrapper distribution paths"
+    mapfile -t paths <<<"$wrapper_paths"
     dist_dir=${paths[0]}
     zip=${paths[1]}
     mkdir -p "$dist_dir"
@@ -719,12 +785,17 @@ prefetch_command() {
   mkdir -p "$user_home/init.d"
   install -m 0644 "$lib/user.init.gradle" "$user_home/init.d/gradle-purifier.gradle"
 
-  echo "gradle-purifier: prefetched $lockfile. ./gradlew, a Gradle on the PATH and an IDE now build $root from the locked downloads, offline; the init script is $user_home/init.d/gradle-purifier.gradle. Run 'gradle-purifier prefetch' again after each lock." >&2
-  local major
-  major=$(jq -r '.javaMajor' "$lockfile")
-  if [ -n "${JAVA_HOME:-}" ] && ! "$JAVA_HOME/bin/java" -version 2>&1 | grep -q "version \"${major}[.\"]"; then
-    echo "gradle-purifier: the lock was made on Java $major and JAVA_HOME is another; for the same builds, export JAVA_HOME=$(jdk_home "$jdk")" >&2
+  if source_sdk_mode; then
+    echo "gradle-purifier: prefetched $lockfile. The declared native manager home is $(selected_java_home "$jdk"). Ordinary Gradle and IDE commands require working original native SDK discovery configuration; prefetch does not rewrite it. Run prefetch again after each lock." >&2
+  else
+    echo "gradle-purifier: prefetched $lockfile. ./gradlew, a Gradle on the PATH and an IDE now build $root from the locked downloads, offline; the init script is $user_home/init.d/gradle-purifier.gradle. Run 'gradle-purifier prefetch' again after each lock." >&2
+    local major
+    major=$(jq -r '.javaMajor' "$lockfile")
+    if [ -n "${JAVA_HOME:-}" ] && ! "$JAVA_HOME/bin/java" -version 2>&1 | grep -q "version \"${major}[.\"]"; then
+      echo "gradle-purifier: the lock was made on Java $major and JAVA_HOME is another; for the same builds, export JAVA_HOME=$(selected_java_home "$jdk")" >&2
+    fi
   fi
+
 }
 
 # Builds the release with Nix, and runs the build's publish tasks
@@ -782,13 +853,21 @@ publish_command() {
   mapfile -t excluded < <(jq -r '.projects[] | (if .path == ":" then "" else .path end) as $p
     | .publications[] | select((.kind // "") != "legacy-maven-upload") | "-x", "\($p):generateMetadataFileFor\(.name[0:1] | ascii_upcase)\(.name[1:])Publication"' "$lockfile")
   mapfile -t locked_args < <(jq -r '.gradleArguments[]' "$lockfile")
+  local source_native_args=()
+  if source_sdk_mode; then
+    local discovery_configuration
+    discovery_configuration=$("$default_java/bin/java" "$lib/SdkDiscoveryProperties.java" "$root/gradle.properties" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" -- "${locked_args[@]}" "$@")
+    if [ "$discovery_configuration" = absent ]; then
+      source_native_args=("-Porg.gradle.java.installations.paths=$(jq -r '.paths | join(",")' "$sdk_context")" -Porg.gradle.java.installations.auto-detect=false)
+    fi
+  fi
   local gradle_flags=() publish_args_json
   publish_args_json=$(jq -n -c '$ARGS.positional' --args -- "${locked_args[@]}" "$@")
-  GRADLE_PURIFIER_MODE='' JAVA_HOME=$(jdk_home "$jdk") \
+  GRADLE_PURIFIER_MODE='' JAVA_HOME=$(selected_java_home "$jdk") \
     python3 "$lib/gradle-flags.py" publish "$state/publish-gradle-help.txt" --gradle "$distribution/bin/gradle" --arguments-json "$publish_args_json" >"$state/publish-gradle-flags.txt" \
     || die "could not select native Gradle controls"
   mapfile -t gradle_flags <"$state/publish-gradle-flags.txt"
-  JAVA_HOME=$(jdk_home "$jdk") \
+  JAVA_HOME=$(selected_java_home "$jdk") \
     GRADLE_PURIFIER_MODE=publish \
     GRADLE_PURIFIER_BUILD_ROOT=$root \
     GRADLE_PURIFIER_REPOSITORY=file://$tree \
@@ -800,7 +879,7 @@ publish_command() {
     --init-script "$lib/purifier.init.gradle" \
     --init-script "$lib/task-jdks.init.gradle" \
     "-Dorg.gradle.internal.plugins.portal.url.override=file://$tree/$portal" \
-    "${locked_args[@]}" "${excluded[@]}" "$@" --offline "${gradle_flags[@]}"
+    "${locked_args[@]}" "${excluded[@]}" "$@" "${source_native_args[@]}" --offline "${gradle_flags[@]}"
 }
 
 # The unit tests (tests/cli-unit.sh) source the command for its functions.
