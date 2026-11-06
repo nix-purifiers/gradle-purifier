@@ -66,6 +66,8 @@ if __name__ == "__main__":
     if sys.argv[1] == "--release-lock":
         release = Path(sys.argv[2])
         lock = json.loads(Path(sys.argv[3]).read_text())
+        if Path(lock.get("distribution", "")).name == "gradle-5.6.4-bin.zip":
+            raise ValueError("Gradle5.6.4 strict legacy Maven publish requires unsupported reproducible native metadata")
         for project in lock["projects"]:
             identifier = lock["rootProjectName"] if project["path"] == ":" else project["path"][1:].replace(":", "-")
             for publication in project["publications"]:

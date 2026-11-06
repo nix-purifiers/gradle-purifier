@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MIT
+// Gradle5.6 has no beforeSettings hook. Validate this declarative subset before native evaluation.
+import groovy.json.JsonOutput
+import java.nio.file.Files
+import org.gradle.initialization.layout.BuildLayoutFactory
+import org.gradle.initialization.layout.BuildLayoutConfiguration
+
+class PurifierLegacySettingsGrammar {
+    static List parse(String text) {
+        if (text.any { ((int)it) > 127 || ((int)it) == 0 || it == '\\' || it == '\r' })
+            throw new IllegalArgumentException('encoding or escape outside declarative grammar')
+        def tokens = []; int i = 0
+        while (i < text.length()) {
+            char c = text.charAt(i)
+            if (c == ' ' || c == '\t') { i++; continue }
+            if (c == '\n' || c == ';') { tokens << ['sep', '']; i++; continue }
+            if (text.startsWith('//', i)) {
+                int end = text.indexOf('\n', i + 2); i = end < 0 ? text.length() : end; continue
+            }
+            if (text.startsWith('/*', i)) {
+                int end = text.indexOf('*/', i + 2)
+                if (end < 0) throw new IllegalArgumentException('unterminated comment')
+                if (text.substring(i, end + 2).contains('\n')) tokens << ['sep', '']
+                i = end + 2; continue
+            }
+            if (c == '\'' || c == '"') {
+                int end = text.indexOf(String.valueOf(c), i + 1)
+                if (end < 0) throw new IllegalArgumentException('unterminated literal')
+                String value = text.substring(i + 1, end)
+                if (!(value ==~ /[A-Za-z0-9_:.-]+/)) throw new IllegalArgumentException('nonliteral or unsafe string')
+                tokens << ['str', value]; i = end + 1; continue
+            }
+            if (Character.isLetter(c) || c == '_') {
+                int end = i + 1
+                while (end < text.length() && (Character.isLetterOrDigit(text.charAt(end)) || text.charAt(end) == '_')) end++
+                tokens << ['id', text.substring(i, end)]; i = end; continue
+            }
+            if (c in ['.' as char, '=' as char, '(' as char, ')' as char, ',' as char]) {
+                tokens << [String.valueOf(c), String.valueOf(c)]; i++; continue
+            }
+            throw new IllegalArgumentException('unknown token')
+        }
+        tokens << ['eof', '']; int p = 0; def declarations = []; boolean named = false
+        def take = { String kind, String value = null ->
+            def token = tokens[p]
+            if (token[0] != kind || (value != null && token[1] != value)) throw new IllegalArgumentException('unexpected declarative token')
+            p++; token[1]
+        }
+        def safe = { String value -> value ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*/ && !(value in ['.', '..']) }
+        while (tokens[p][0] != 'eof') {
+            if (tokens[p][0] == 'sep') { p++; continue }
+            String command = take('id')
+            if (command == 'rootProject') {
+                if (named) throw new IllegalArgumentException('duplicate root name')
+                take('.', '.'); take('id', 'name'); take('=', '='); String name = take('str')
+                if (!safe(name)) throw new IllegalArgumentException('unsafe root name')
+                declarations << [rootName: name]; named = true
+            } else if (command == 'include') {
+                boolean parens = tokens[p][0] == '('; if (parens) p++
+                def paths = []
+                while (true) {
+                    String path = take('str'); String body = path.startsWith(':') ? path.substring(1) : path
+                    if (!body || !body.split(':', -1).every { safe(it) }) throw new IllegalArgumentException('unsafe included path')
+                    paths << path
+                    if (tokens[p][0] != ',') break
+                    p++
+                }
+                if (parens) take(')', ')')
+                declarations << [includes: paths]
+            } else throw new IllegalArgumentException('settings code outside declarative grammar')
+            if (!(tokens[p][0] in ['sep', 'eof'])) throw new IllegalArgumentException('trailing settings code')
+        }
+        declarations
+    }
+}
+
+if (gradle.gradleVersion != '5.6.4') throw new GradleException('gradle-purifier: legacy settings profile requires Gradle5.6.4')
+def reject = { reason -> throw new GradleException('gradle-purifier: Gradle5.6.4 settings supports literal rootProject.name and include declarations only; unsupported settings before evaluation: ' + reason) }
+def noSymlinks = { File file ->
+    def path = file.absoluteFile.toPath().normalize()
+    while (path != null) { if (Files.isSymbolicLink(path)) reject('symlink'); path = path.parent }
+}
+if (gradle.startParameter.settingsFile != null) reject('explicit settings file unsupported')
+noSymlinks(gradle.startParameter.currentDir)
+def layout = new BuildLayoutFactory().getLayoutFor(new BuildLayoutConfiguration(gradle.startParameter))
+def file = layout.settingsFile
+if (file == null || !file.isFile()) reject('missing settings file unsupported')
+noSymlinks(layout.settingsDir)
+noSymlinks(new File(layout.settingsDir, 'settings.gradle'))
+noSymlinks(file)
+if (file.name != 'settings.gradle' || new File(file.parentFile, 'settings.gradle.kts').exists()) reject('Kotlin or ambiguous settings unsupported')
+def bytes = file.bytes
+if (bytes.length > 65536 || bytes.any { (it & 255) > 127 }) reject('size or encoding')
+def declarations
+try { declarations = PurifierLegacySettingsGrammar.parse(new String(bytes, 'US-ASCII')) }
+catch (IllegalArgumentException error) { reject(error.message) }
+def hash = { byte[] value -> java.security.MessageDigest.getInstance('SHA-256').digest(value).encodeHex().toString() }
+def initialHash = hash(bytes)
+def output = System.getenv('GRADLE_PURIFIER_SETTINGS_REPORT')
+if (output) new File(output).text = JsonOutput.toJson([phase:'before-settings-evaluation', settingsFile:file.absolutePath,
+    rootDirectory:layout.rootDirectory.absolutePath, currentDirectory:gradle.startParameter.currentDir.absolutePath,
+    sha256:initialHash, declarations:declarations])
+gradle.settingsEvaluated { settings ->
+    if (hash(file.bytes) != initialHash || settings.settingsDir.canonicalFile != file.parentFile.canonicalFile)
+        reject('native settings source changed or selected directory disagrees')
+}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // This companion is loaded only by the legacy maven plugin. Private API
-// checks are bounded to the native Gradle 6.9.4 implementation under test.
+// checks are bounded to independent native Gradle5.6.4 and6.9.4 profiles.
 import groovy.json.JsonSlurper
 import java.lang.reflect.Proxy
 import java.lang.reflect.InvocationHandler
@@ -10,14 +10,18 @@ import org.gradle.api.artifacts.maven.MavenPom
 import org.gradle.api.artifacts.maven.PublishFilter
 
 def context = gradle.ext.purifierLegacyMaven
-if (gradle.gradleVersion != '6.9.4') throw new GradleException('gradle-purifier: legacy Maven publication requires the proven Gradle 6.9.4 implementation')
+def legacy56 = gradle.gradleVersion == '5.6.4'
+if (!(gradle.gradleVersion in ['5.6.4', '6.9.4'])) throw new GradleException('gradle-purifier: legacy Maven publication requires the proven Gradle5.6.4 or6.9.4 implementation')
 def fail = { message -> throw new GradleException("gradle-purifier: legacy Maven ${message}") }
+if (legacy56 && context.captureMetadata == true) fail('Gradle5.6.4 strict native metadata capture is unsupported')
+if (legacy56 && context.bindings.any { it.publication.containsKey('nativeMetadata') }) fail('Gradle5.6.4 supplied nativeMetadata capability is unsupported')
 def safe = { value -> value instanceof String && value ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*/ && !(value in ['.', '..']) }
 def projectPath = { value -> value instanceof String && (value == ':' ||
     (value.startsWith(':') && !value.endsWith(':') && !value.contains('::') && !value.contains('/') && !value.contains('\\') &&
      !value.any { Character.isISOControl((char) it) } && value.substring(1).split(':').every { !(it in ['.', '..']) })) }
 def metadataCapability = [kind: 'gradle-java-component', version: 1]
 def metadataRequested = { project ->
+    if (legacy56) return false
     def bindings = context.bindings.findAll { it.path == project.path }
     bindings.each { binding ->
         if (binding.publication.containsKey('nativeMetadata') && binding.publication.nativeMetadata != metadataCapability)
@@ -55,6 +59,13 @@ def guardDeployer = { deployer, expectedPom ->
 def guardNativeActions = { task, original, actions ->
     def standardType = 'org.gradle.api.internal.project.taskfactory.StandardTaskAction'
     def wrapperType = 'org.gradle.api.internal.AbstractTask$TaskActionWrapper'
+    if (legacy56) {
+        if (actions.collect { it.getClass().name } != [wrapperType]) fail('custom Upload actions are unsupported')
+        def action = privateField(actions[0], wrapperType, 'action')
+        if (action.getClass().name != standardType || !privateField(action, standardType, 'type').is(task.getClass()) ||
+            privateField(action, standardType, 'method') != Upload.getDeclaredMethod('upload')) fail('unsupported native Upload action binding')
+        return
+    }
     if (actions.collect { it.getClass().name } != (original ? [wrapperType, standardType] : [standardType])) fail('custom Upload actions are unsupported')
     def action = actions.last()
     if (!privateField(action, standardType, 'type').is(task.getClass()) ||

@@ -95,6 +95,11 @@ let
     && (
       role.provenance or null == "resolved-selected-provider"
       || (
+        role.provenance or null == "gradle-5.6.4-configured-javadoc-executable-v1"
+        && role.role == "javadoc"
+        && baseNameOf (raw.distribution or "") == "gradle-5.6.4-bin.zip"
+      )
+      || (
         role.provenance or null == "configured-native-executable"
         && builtins.elem role.role [
           "compiler"
@@ -376,7 +381,14 @@ let
         || (
           legacy != [ ]
           && (
-            distribution != "gradle-6.9.4-bin.zip"
+            !(builtins.elem distribution [
+              "gradle-5.6.4-bin.zip"
+              "gradle-6.9.4-bin.zip"
+            ])
+            || (
+              distribution == "gradle-5.6.4-bin.zip"
+              && lib.any (binding: binding.publication ? nativeMetadata) legacy
+            )
             || !(lib.all validProjectPath paths)
             || !(validProjectPath ":${raw.rootProjectName}")
             || builtins.length paths != builtins.length (lib.unique paths)

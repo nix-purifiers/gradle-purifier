@@ -551,6 +551,10 @@ let
   publicationRepository =
     runCommand "${gradle.rootProjectName}-jvm-publications" { nativeBuildInputs = [ python3 ]; }
       ''
+        ${lib.optionalString (gradle.gradleVersion == "5.6.4") ''
+          echo 'gradle-purifier: Gradle5.6.4 strict legacy Maven projection requires unsupported reproducible native metadata' >&2
+          exit 1
+        ''}
         mkdir $out
         ${lib.concatMapStrings
           (package: ''
