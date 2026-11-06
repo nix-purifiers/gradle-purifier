@@ -302,6 +302,12 @@ Sandboxed Maven publications normalize timestamped SNAPSHOT filenames from
 their emitted metadata before removing timestamp metadata. POM, module and
 classifier artifacts remain required where the lock declares them.
 
+Repositories with explicit DNS or IPv4 ports replay through immutable directory
+aliases whose authority names contain no classpath separator. This keeps forked
+Java compilers and runtimes from splitting a dependency path at the port's colon.
+The original URLs, lock identities and artifact bytes remain unchanged; existing
+locks gain the aliases when prefetched with the updated purifier.
+
 After `prefetch`, `./gradlew`, a Gradle on the `PATH` and an IDE build
 with the network cut off. Gradle reads the locked files from the Nix
 store, so its own download cache stays empty.

@@ -330,3 +330,95 @@ jobs:
             ${{ runner.temp }}/gradle-hint-proof/sdks.json
             ${{ runner.temp }}/gradle-hint-proof/native/*.json
             ${{ runner.temp }}/gradle-hint-proof/native/*/*.log
+
+  repository-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Bind replay proof to candidate sources and immutable SDKs
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-replay-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-replay-proof/source-revision"
+          python - <<'PYTHON'
+          from pathlib import Path
+          import hashlib,json,os,subprocess
+          files=subprocess.check_output(['git','ls-files'],text=True).splitlines()
+          Path(os.environ['RUNNER_TEMP'],'gradle-replay-proof/source-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files if Path(p).is_file()},indent=2))
+          PYTHON
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-replay-candidate"
+          nix build 'github:nix-purifiers/gradle-purifier/fa0cd7653fed12aabd6da5fcada1e4f33c96779b#default' \
+            --out-link "$RUNNER_TEMP/gradle-replay-baseline"
+          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk11_headless' 'nixpkgs#jdk17_headless' 'nixpkgs#jdk21_headless' 'nixpkgs#maven' --no-link
+          # The SDK home interpolation below belongs to Nix.
+          # shellcheck disable=SC2016
+          nix eval --impure --json --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+                describe = j: { path = toString j; home = j.home or "${j}/lib/openjdk"; version = j.version; };
+            in { java8 = describe p.jdk8_headless; java11 = describe p.jdk11_headless;
+                 java17 = describe p.jdk17_headless; java21 = describe p.jdk21_headless; }
+          ' > "$RUNNER_TEMP/gradle-replay-proof/sdks.json"
+          nix eval --impure --raw --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+            in p.maven.outPath
+          ' > "$RUNNER_TEMP/gradle-replay-proof/maven-path.txt"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Verify native URI identity, collisions and unsupported URL bounds
+        run: |
+          # Fetch the existing checksummed distribution through its profile helper.
+          python - <<'PYTHON'
+          from pathlib import Path
+          import importlib.util,json,os
+          spec=importlib.util.spec_from_file_location('epoch','tests/epoch-probes/probe.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          profile=next(p for p in json.loads(Path('tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-6.9.4')
+          m.distribution(profile,Path(os.environ['RUNNER_TEMP'])/'gradle-replay-distributions')
+          PYTHON
+          java_home=$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["java11"]["home"])' "$RUNNER_TEMP/gradle-replay-proof/sdks.json")
+          python tests/replay-repositories/mapping.py \
+            --gradle "$RUNNER_TEMP/gradle-replay-distributions/gradle-6.9.4/bin/gradle" \
+            --java-home "$java_home" --output "$RUNNER_TEMP/gradle-replay-proof/mapping"
+      - name: Reproduce released failure and replay the unchanged legacy lock
+        run: |
+          python tests/replay-repositories/legacy-origin.py \
+            --cli "$RUNNER_TEMP/gradle-replay-candidate/bin/gradle-purifier" \
+            --baseline-cli "$RUNNER_TEMP/gradle-replay-baseline/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-replay-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-replay-distributions" \
+            --output "$RUNNER_TEMP/gradle-replay-proof/legacy"
+      - name: Publish projected metadata and resolve transitive consumers with the origin stopped
+        run: |
+          maven=$(cat "$RUNNER_TEMP/gradle-replay-proof/maven-path.txt")
+          python tests/replay-repositories/lifecycle.py \
+            --cli "$RUNNER_TEMP/gradle-replay-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-replay-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-replay-distributions" \
+            --maven "$maven/bin/mvn" --output "$RUNNER_TEMP/gradle-replay-proof/modern"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-repository-replay
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/gradle-replay-proof/source-revision
+            ${{ runner.temp }}/gradle-replay-proof/source-hashes.json
+            ${{ runner.temp }}/gradle-replay-proof/sdks.json
+            ${{ runner.temp }}/gradle-replay-proof/maven-path.txt
+            ${{ runner.temp }}/gradle-replay-proof/mapping/*.json
+            ${{ runner.temp }}/gradle-replay-proof/mapping/*.log
+            ${{ runner.temp }}/gradle-replay-proof/legacy/*.json
+            ${{ runner.temp }}/gradle-replay-proof/legacy/*.log
+            ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.json
+            ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.log
+            ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.txt
+            ${{ runner.temp }}/gradle-replay-proof/modern/*.json
+            ${{ runner.temp }}/gradle-replay-proof/modern/*.log
+            ${{ runner.temp }}/gradle-replay-proof/modern/*.txt
+            ${{ runner.temp }}/gradle-replay-proof/modern/gradle-consumer/build.gradle
+            ${{ runner.temp }}/gradle-replay-proof/modern/maven-consumer/pom.xml

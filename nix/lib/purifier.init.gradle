@@ -158,6 +158,9 @@ class PurifierJavadocMetadata {
     }
 
     static URI mapped(String base, URI uri) {
+        if (uri.port == -1 && uri.rawAuthority?.contains(':')) {
+            throw new GradleException('gradle-purifier: unsupported explicit-port repository URL')
+        }
         def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
         URI.create("${base}/${uri.scheme.toLowerCase(Locale.ROOT)}/${authority}${uri.rawPath}")
     }
@@ -362,12 +365,33 @@ def selectProvided = { configurations ->
 // The stand-in URL of a remote URL. A URL that is not http or https, or
 // that already points at the stand-in (the plugin portal, which the
 // command line overrides), stays as it is, and the result is null.
+class PurifierRepositoryReplay {
+    static URI mapped(String base, URI uri) {
+        if (uri.port == -1 && uri.rawAuthority?.contains(':')) {
+            throw new GradleException('gradle-purifier: unsupported explicit-port repository URL')
+        }
+        def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
+        if (uri.port != -1) {
+            if (!uri.host || uri.host.startsWith('[') || uri.userInfo != null || uri.rawAuthority != authority || uri.rawAuthority.contains('%') ||
+                uri.rawQuery != null || uri.rawFragment != null || uri.port > 65535 || uri.normalize() != uri ||
+                uri.path.contains('\\') || uri.path.tokenize('/').any { it in ['.', '..'] } ||
+                uri.path.any { Character.isISOControl((char) it) }) {
+                throw new GradleException('gradle-purifier: unsupported explicit-port repository URL')
+            }
+            if (URI.create(base).scheme == 'file') {
+                def encoded = uri.rawAuthority.getBytes('UTF-8').encodeHex().toString()
+                return URI.create("${base}/.gradle-purifier-replay-v1/${uri.scheme}/${encoded}${uri.rawPath ?: ''}")
+            }
+        }
+        URI.create("${base}/${uri.scheme}/${authority}${uri.rawPath ?: ''}")
+    }
+}
+
 def standIn = { URI uri ->
     if (uri == null || !(uri.scheme in ['http', 'https']) || uri.toString().startsWith(base)) {
         return null
     }
-    def authority = uri.port == -1 ? uri.host : "${uri.host}:${uri.port}"
-    return URI.create("${base}/${uri.scheme}/${authority}${uri.rawPath ?: ''}")
+    return PurifierRepositoryReplay.mapped(base, uri)
 }
 
 def purify = { repository ->

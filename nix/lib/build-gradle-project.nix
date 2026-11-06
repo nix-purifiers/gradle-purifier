@@ -195,7 +195,7 @@ let
 
   fetchEntry = purifier.fetchEntry (fetcherArgs // fetchers);
 
-  repository = purifier.tree (
+  lockedRepository = purifier.tree (
     fetcherArgs
     // {
       name = "gradle-purifier-repository";
@@ -206,6 +206,19 @@ let
     }
     // fetchers
   );
+
+  portUrls = map (entry: entry.url) (
+    builtins.filter (
+      entry: entry ? url && builtins.match "https?://[^/]*:[0-9]+/.*" entry.url != null
+    ) entries
+  );
+  repository =
+    if portUrls == [ ] then
+      lockedRepository
+    else
+      runCommand "gradle-purifier-repository" { } ''
+        ${python3}/bin/python ${./replay-repositories.py} ${lockedRepository} "$out" ${writeText "gradle-replay-authorities.json" (builtins.toJSON portUrls)}
+      '';
 
   provided = purifier.jvmProjections {
     repository = null;
