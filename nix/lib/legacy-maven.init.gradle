@@ -1,0 +1,211 @@
+// SPDX-License-Identifier: MIT
+// This companion is loaded only by the legacy maven plugin. Private API
+// checks are bounded to the native Gradle 6.9.4 implementation under test.
+import groovy.json.JsonSlurper
+import java.lang.reflect.Proxy
+import java.lang.reflect.InvocationHandler
+import org.gradle.api.tasks.Upload
+import org.gradle.api.artifacts.maven.MavenDeployer
+import org.gradle.api.artifacts.maven.MavenPom
+import org.gradle.api.artifacts.maven.PublishFilter
+
+def context = gradle.ext.purifierLegacyMaven
+if (gradle.gradleVersion != '6.9.4') throw new GradleException('gradle-purifier: legacy Maven publication requires the proven Gradle 6.9.4 implementation')
+def fail = { message -> throw new GradleException("gradle-purifier: legacy Maven ${message}") }
+def safe = { value -> value instanceof String && value ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*/ && !(value in ['.', '..']) }
+def projectPath = { value -> value instanceof String && (value == ':' ||
+    (value.startsWith(':') && !value.endsWith(':') && !value.contains('::') && !value.contains('/') && !value.contains('\\') &&
+     !value.any { Character.isISOControl((char) it) } && value.substring(1).split(':').every { !(it in ['.', '..']) })) }
+def configured = [:]
+def registered = [] as Set
+
+def privateField = { object, owner, name ->
+    def declaring = object.getClass()
+    while (declaring != null && declaring.name != owner) declaring = declaring.superclass
+    if (declaring == null) fail('unknown native implementation')
+    def field = declaring.getDeclaredField(name)
+    field.accessible = true
+    field.get(object)
+}
+def guardDeployer = { deployer, expectedPom ->
+    if (deployer.getClass().name != 'org.gradle.api.publication.maven.internal.deployer.DefaultGroovyMavenDeployer' ||
+        !(expectedPom == null ? deployer.pom.getClass().name == 'org.gradle.api.publication.maven.internal.pom.DefaultMavenPom' : deployer.pom.is(expectedPom))) fail('unsupported deployer or POM implementation')
+    // No public getter enumerates these callbacks/providers. Unknown or denied
+    // access fails before deployment; never inspect their bodies or credentials.
+    def actions = privateField(deployer, 'org.gradle.api.publication.maven.internal.deployer.AbstractMavenResolver', 'beforeDeploymentActions')
+    if (actions.getClass().name != 'org.gradle.internal.MutableActionSet' || !actions.isEmpty()) fail('custom deployment hooks are unsupported')
+    def providers = privateField(deployer, 'org.gradle.api.publication.maven.internal.deployer.BaseMavenDeployer', 'protocolProviderJars')
+    if (providers.getClass().name != 'java.util.ArrayList' || !providers.isEmpty()) fail('custom protocol providers are unsupported')
+    def filters = deployer.activePomFilters.toList()
+    if (filters.size() != 1 || filters[0].name != 'default' || !filters[0].filter.is(PublishFilter.ALWAYS_ACCEPT)) fail('custom POM filters are unsupported')
+}
+def guardTask = { task ->
+    if (task.getClass().name != 'org.gradle.api.tasks.Upload_Decorated') fail('unsupported Upload implementation')
+    if (!task.enabled) fail('disabled Upload is unsupported')
+    if (task.onlyIf.getClass().name != 'org.gradle.api.specs.AndSpec' || task.onlyIf.specs.size() != 1 ||
+        task.onlyIf.specs[0].getClass().name != 'org.gradle.api.internal.AbstractTask$8') fail('custom Upload predicates are unsupported')
+}
+def inspect = { project ->
+    if (!projectPath(project.path)) fail('invalid project owner')
+    def task = project.tasks.findByName('uploadArchives')
+    if (task == null) fail('missing uploadArchives')
+    // Applying maven alone does not declare a publication (common for parents).
+    if (task.repositories.isEmpty()) return null
+    guardTask(task)
+    if (!task.dependsOn.isEmpty()) fail('custom Upload dependencies are unsupported')
+    if (task.actions.collect { it.getClass().name } != ['org.gradle.api.internal.AbstractTask$TaskActionWrapper', 'org.gradle.api.internal.project.taskfactory.StandardTaskAction']) fail('custom Upload actions are unsupported')
+    def deployers = task.repositories.withType(MavenDeployer).toList()
+    if (deployers.size() != 1 || task.repositories.size() != 1) fail('requires exactly one MavenDeployer')
+    def deployer = deployers[0]
+    guardDeployer(deployer, null)
+    if (task.configuration == null || task.configuration.name != 'archives') fail('requires the archives configuration')
+    def artifacts = task.configuration.allArtifacts.toList()
+    if (artifacts.size() != 1 || artifacts[0].type != 'jar' || artifacts[0].extension != 'jar' || artifacts[0].classifier) fail('requires exactly one unclassified JAR')
+    def pom = deployer.pom
+    // DefaultArtifactPom.setPomMetaInfo replaces these exact native sentinels.
+    def group = pom.groupId == 'unknown' ? project.group.toString() : pom.groupId
+    def artifact = pom.artifactId == 'empty-project' ? artifacts[0].name : pom.artifactId
+    def version = pom.version == '0' ? project.version.toString() : pom.version
+    if (![group, artifact, version].every(safe)) fail('invalid coordinates')
+    if (version.endsWith('-SNAPSHOT')) fail('SNAPSHOT deployment is outside the proven release-only scope')
+    [task: task, deployer: deployer, descriptor: [kind: 'legacy-maven-upload', name: 'legacyUploadArchives', uploadTask: task.path,
+        configuration: 'archives', groupId: group, artifactId: artifact, version: version, artifacts: [[classifier: null, extension: 'jar']]]]
+}
+def frozenPom = { project, file, module ->
+    def bytes = file.bytes
+    def xml = new XmlSlurper().parseText(new String(bytes, 'UTF-8'))
+    def coordinates = [GroupId: xml.groupId.text(), ArtifactId: xml.artifactId.text(), Version: xml.version.text(), Packaging: (xml.packaging.text() ?: 'jar')]
+    if ([coordinates.GroupId, coordinates.ArtifactId, coordinates.Version, coordinates.Packaging] != [module.group, module.name, module.version, 'jar']) fail('Nix POM coordinates differ from projected publication')
+    InvocationHandler handler = { proxy, method, args ->
+        switch (method.name) {
+            case 'toString': return 'PurifierFrozenLegacyPom'
+            case 'hashCode': return System.identityHashCode(proxy)
+            case 'equals': return proxy.is(args[0])
+            case 'getEffectivePom': return proxy
+            case 'writeTo':
+                if (args[0] instanceof Writer) args[0].write(new String(bytes, 'UTF-8'))
+                else { def output = project.file(args[0]); output.parentFile.mkdirs(); output.bytes = bytes }
+                return proxy
+        }
+        if (method.name.startsWith('get') && coordinates.containsKey(method.name.substring(3))) return coordinates[method.name.substring(3)]
+        if (method.name.startsWith('set') && coordinates.containsKey(method.name.substring(3)) && args[0] == coordinates[method.name.substring(3)]) return proxy
+        fail("unsupported frozen POM method or mutation: ${method.name}")
+    } as InvocationHandler
+    [pom: Proxy.newProxyInstance(MavenPom.classLoader, [MavenPom] as Class[], handler), bytes: bytes]
+}
+def catalog = null
+def projectedInputs = { descriptor ->
+    if (catalog == null) {
+        if (!context.repository || !context.catalog) fail('missing authoritative Nix projection')
+        catalog = new JsonSlurper().parse(new File(context.catalog))
+        if (catalog.version != 1 || !(catalog.modules instanceof List) || catalog.modules.isEmpty()) fail('invalid Nix projection catalog')
+        def keys = [] as Set
+        catalog.modules.each { module ->
+            if (!(module instanceof Map) || !['group', 'name', 'version', 'originalVersion'].every { safe(module[it]) } ||
+                !(module.producer instanceof String) || !(module.producer ==~ /[0-9a-f]{64}/) || !keys.add([module.group, module.name])) fail('ambiguous Nix projection modules')
+            if (module.version.endsWith('-SNAPSHOT') || module.originalVersion.endsWith('-SNAPSHOT')) fail('SNAPSHOT deployment is outside the proven release-only scope')
+        }
+    }
+    def moduleCoordinates = catalog.modules.collect { [it.group, it.name, it.version] } as Set
+    if (!(catalog.publications instanceof List) || catalog.publications.size() != moduleCoordinates.size() ||
+        (catalog.publications.collect { [it.group, it.name, it.version] } as Set) != moduleCoordinates) fail('unsupported projected publication closure; refusing to omit descriptors')
+    def primary = catalog.modules.findAll { it.group == descriptor.groupId && it.name == descriptor.artifactId && it.originalVersion == descriptor.version }
+    if (primary.size() != 1) fail('Nix projection does not match locked publication')
+    ([primary[0]] + catalog.modules.findAll { !it.is(primary[0]) }).collect { module ->
+        def directory = new File(context.repository, "${module.group.replace('.', '/')}/${module.name}/${module.version}")
+        def prefix = "${module.name}-${module.version}".toString()
+        def jar = new File(directory, prefix + '.jar')
+        def pom = new File(directory, prefix + '.pom')
+        if (!jar.isFile() || !pom.isFile()) fail('missing Nix publication input')
+        def unexpected = directory.listFiles().findAll { file ->
+            file.isFile() && !(file.name in [prefix + '.jar', prefix + '.pom']) && !(file.name ==~ /.*\.(md5|sha1|sha256|sha512)$/)
+        }
+        // Do not drop Gradle strict metadata, classifiers or other artifacts.
+        // Their native Upload mapping needs a distinct proof before acceptance.
+        if (!unexpected.isEmpty()) fail('unsupported projected artifacts; refusing to discard metadata')
+        [module: module, jar: jar, pom: pom]
+    }
+}
+def deployments = []
+def configure
+configure = { project ->
+    if (configured.containsKey(project.path)) return configured[project.path]?.descriptor
+    def found = inspect(project)
+    def expected = context.bindings.findAll { it.path == project.path }
+    if (found == null) {
+        if (!expected.isEmpty()) fail('publication binding disappeared')
+        configured[project.path] = null
+        return null
+    }
+    def descriptor = found.descriptor
+    def task = found.task
+    def deployer = found.deployer
+    def id = project.path == ':' ? project.rootProject.name : project.path.substring(1).replace(':', '-')
+    if (configured.values().findAll { it != null }.any { it.descriptor.groupId == descriptor.groupId && it.descriptor.artifactId == descriptor.artifactId && it.descriptor.version == descriptor.version }) fail('duplicate publication coordinates')
+    if (context.mode != 'lock' && (expected.size() != 1 || expected[0].publication != descriptor)) fail("publication binding changed for ${task.path}; run gradle-purifier lock")
+    if (context.mode == 'publish') {
+        if (!context.artifacts[id]) fail('no Nix package for locked publication')
+        def inputs = projectedInputs(descriptor)
+        def repository = deployer.getRepository()
+        def snapshotRepository = deployer.getSnapshotRepository()
+        def owned = []
+        inputs.eachWithIndex { input, index ->
+            def deployment = index == 0 ? task : null
+            def configurationName = index == 0 ? 'purifierLegacyArtifacts' : "purifierLegacyInputArtifacts${index}"
+            def taskName = "purifierLegacyDeployInput${index}"
+            if (project.configurations.findByName(configurationName) != null || (index != 0 && project.tasks.findByName(taskName) != null)) fail('reserved publication task/configuration collision')
+            if (index != 0) deployment = project.tasks.create(taskName, Upload)
+            def configuration = project.configurations.create(configurationName)
+            project.artifacts.add(configuration.name, input.jar) { artifact -> artifact.name = input.module.name; artifact.type = 'jar'; artifact.extension = 'jar'; artifact.classifier = null }
+            deployment.configuration = configuration
+            def target = index == 0 ? deployer : deployment.repositories.mavenDeployer { }
+            if (index != 0) { target.setRepository(repository); target.setSnapshotRepository(snapshotRepository); task.dependsOn(deployment) }
+            def frozen = frozenPom(project, input.pom, input.module)
+            target.pom = frozen.pom
+            def record = [task: deployment, owner: task, source: deployer, target: target, repository: repository, snapshot: snapshotRepository,
+                configuration: configuration, input: input, frozen: frozen]
+            owned.add(record)
+            deployments.add(record)
+        }
+        // Every generated upload checks the original source task too, so a
+        // graph-time custom action/predicate cannot publish just its dependency.
+        owned.each { record -> record.task.doFirst {
+            deployments.each { current ->
+                guardTask(current.owner)
+                if (current.owner.actions.size() != current.ownerActions.size() || !current.owner.actions.withIndex().every { action, i -> action.is(current.ownerActions[i]) } ||
+                    current.owner.dependsOn.size() != current.ownerDependencies.size() || !current.owner.dependsOn.every { dependency -> current.ownerDependencies.any { it.is(dependency) } }) fail('Upload actions or dependencies changed before deployment')
+                guardDeployer(current.target, current.frozen.pom)
+                if (current.task.repositories.size() != 1 || !current.task.repositories.withType(MavenDeployer).toList()[0].is(current.target) ||
+                    !current.target.getRepository().is(current.repository) || !current.target.getSnapshotRepository().is(current.snapshot)) fail('deployment target changed')
+                def artifacts = current.configuration.allArtifacts.toList()
+                if (!current.task.configuration.is(current.configuration) || artifacts.size() != 1 || artifacts[0].file.canonicalFile != current.input.jar.canonicalFile ||
+                    artifacts[0].name != current.input.module.name || artifacts[0].type != 'jar' || artifacts[0].extension != 'jar' || artifacts[0].classifier ||
+                    !current.input.jar.isFile() || !current.input.pom.isFile() || !java.util.Arrays.equals(current.input.pom.bytes, current.frozen.bytes)) fail('publication inputs changed before deployment')
+            }
+        } }
+        owned.each { record -> record.ownerActions = task.actions.toList(); record.ownerDependencies = task.dependsOn.toList() }
+    } else {
+        if (project.tasks.findByName('purifierLegacySnapshot') != null) fail('reserved snapshot task collision')
+        def snapshot = project.tasks.create('purifierLegacySnapshot', Upload)
+        snapshot.configuration = task.configuration
+        snapshot.uploadDescriptor = task.uploadDescriptor
+        snapshot.dependsOn(task.configuration)
+        def destination = new File(new File(context.output, id), 'maven')
+        def target = snapshot.repositories.mavenDeployer { repository(url: destination.toURI()) }
+        target.pom = deployer.pom
+        snapshot.doFirst { if (inspect(project)?.descriptor != descriptor || !target.pom.is(deployer.pom)) fail('snapshot inputs changed'); guardDeployer(target, null) }
+        snapshot.doLast {
+            def pom = new File(destination, "${descriptor.groupId.replace('.', '/')}/${descriptor.artifactId}/${descriptor.version}/${descriptor.artifactId}-${descriptor.version}.pom")
+            if (!pom.isFile()) fail('native snapshot coordinates differ from locked publication')
+            def xml = new XmlSlurper().parse(pom)
+            if ([xml.groupId.text(), xml.artifactId.text(), xml.version.text()] != [descriptor.groupId, descriptor.artifactId, descriptor.version]) fail('native snapshot POM coordinates changed')
+        }
+    }
+    configured[project.path] = found
+    descriptor
+}
+context.describe = { project ->
+    def descriptor = registered.contains(project.path) ? configure(project) : null
+    descriptor == null ? [] : [descriptor]
+}
+context.register = { project -> if (registered.add(project.path)) gradle.projectsEvaluated { configure(project) } }
