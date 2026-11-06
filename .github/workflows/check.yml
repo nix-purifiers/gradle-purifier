@@ -514,6 +514,7 @@ jobs:
             ${{ runner.temp }}/gradle-56-proof/**/repository/**
             ${{ runner.temp }}/gradle-56-proof/**/lock-run/output/**
             ${{ runner.temp }}/gradle-56-proof/**/payloads/**
+            ${{ runner.temp }}/gradle-56-proof/**/native-gradle-version.txt
 
   legacy-maven:
     runs-on: ubuntu-latest
