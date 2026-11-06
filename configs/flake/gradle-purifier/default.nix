@@ -66,6 +66,7 @@
               inherit pkgs;
               overlay = self.overlays.default;
               gradlePurifier = self.lib.gradle-purifier;
+              purifier = self.lib.purifier;
               inherit (self.packages.${system}) gradle-purifier;
             };
             treefmt.programs.nixfmt.enable = true;

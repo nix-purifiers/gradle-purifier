@@ -72,6 +72,9 @@ pkgs.runCommand "gradle-nix-composition"
   ''
     export CATALOG=${producer.projections.maven.catalog}
     export REPOSITORY=${consumer.packages.greeting.maven}
+    export PUBLICATION=${consumer.publication}/repository
+    export DOWNLOADS=${consumer.repository}
+    export RUNTIME=${consumer.packages.greeting.runtime}
     python - <<'PY'
     import json, os, pathlib, xml.etree.ElementTree as ET
     catalog = json.load(open(os.environ['CATALOG']))
@@ -81,6 +84,15 @@ pkgs.runCommand "gradle-nix-composition"
     dependency = next(d for d in root.findall('m:dependencies/m:dependency', ns)
                       if d.findtext('m:artifactId', namespaces=ns) == 'commons-lang3')
     assert dependency.findtext('m:version', namespaces=ns) == selected
+    # commons-text's parent imports this BOM. Preserve its already-locked
+    # module sidecar without promoting the platform into the runtime graph.
+    relative = 'org/junit/junit-bom/5.11.2/junit-bom-5.11.2'
+    published = pathlib.Path(os.environ['PUBLICATION'])
+    captured = pathlib.Path(os.environ['DOWNLOADS']) / 'https/repo.maven.apache.org/maven2'
+    assert (published / (relative + '.module')).read_bytes() == (captured / (relative + '.module')).read_bytes()
+    assert 'published-with-gradle-metadata' in (published / (relative + '.pom')).read_text()
+    runtime = json.loads((pathlib.Path(os.environ['RUNTIME']) / 'purifier-runtime-modules.json').read_text())
+    assert not any(m['group'] == 'org.junit' and m['name'] == 'junit-bom' for m in runtime['modules'])
     PY
     touch $out
   ''

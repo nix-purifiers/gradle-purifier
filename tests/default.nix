@@ -12,6 +12,7 @@
   # The library namespace of the flake: lib.gradle-purifier, with readLock.
   gradlePurifier,
   gradle-purifier,
+  purifier,
 }:
 let
   inherit (pkgs) lib runCommand;
@@ -109,6 +110,15 @@ let
     '';
 in
 {
+  runtime-metadata-unit =
+    runCommand "runtime-metadata-unit" { nativeBuildInputs = [ pkgs.python3 ]; }
+      ''
+        mkdir -p tests nix/lib
+        cp ${./test_export_runtime.py} tests/test_export_runtime.py
+        cp ${../nix/lib/export-runtime.py} nix/lib/export-runtime.py
+        PYTHONDONTWRITEBYTECODE=1 python3 tests/test_export_runtime.py ${purifier.jvmRepositoryTool}
+        touch $out
+      '';
   snapshot-groovy-tests = snapshotGroovy.tests;
   snapshot-groovy-publication =
     expectFiles "snapshot-groovy-publication" snapshotGroovy.packages.snapshot-groovy.maven

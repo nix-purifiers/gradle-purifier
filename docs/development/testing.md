@@ -60,3 +60,10 @@ The tests come in two layers.
 
 The lockfiles of the fixtures are test data. `tests/relock-fixtures.sh`
 renews them; it needs the network.
+
+`runtime-metadata-unit` checks the runtime exporter with the pinned shared
+JVM repository tool, including queried BOM sidecars, coordinate/path
+rejections, duplicate metadata and provided-input authority. The composition
+check also compares the projected JUnit 5.11.2 BOM metadata with the exact
+locked download. Retaining an imported BOM's metadata does not add it to the
+selected runtime components or fetch the artifacts named by its constraints.
