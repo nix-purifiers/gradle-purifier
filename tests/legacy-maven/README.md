@@ -56,7 +56,9 @@ An arbitrary late Gradle listener can execute user code before a task guard;
 atomic deployment is not claimed.
 
 `native-metadata.py` checks owned publication creation, native generator actions,
-predicates, late mutations and implicit task dependencies. `metadata-unavailable.py`
+predicates, late mutations and implicit task dependencies. `publication-selection.py`
+compares native legacy/modern aggregate selection with unrelated unconfigured
+and different-target tasks, retaining real user publications. `metadata-unavailable.py`
 proves that an unsupported POM-only edge passes fresh locking, pure tests and raw
 release, while both strict Nix projection and CLI publication reject before deployment.
 
