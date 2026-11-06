@@ -101,6 +101,14 @@ def konanDataDir = setting('GRADLE_PURIFIER_KONAN_DATA_DIR')
 def runCheck = System.getenv('GRADLE_PURIFIER_CHECK') == '1'
 def rootBuild = gradle.parent == null
 def purifierScriptDirectory = buildscript.sourceFile.parentFile
+// A reserved native metadata publication is an implementation input, not a
+// second user publication. Ownership is by exact object, including callbacks
+// which run synchronously inside the native publication factory.
+def internalLegacyPublication = { project, publication ->
+    gradle.ext.has('purifierLegacyMaven') &&
+        gradle.ext.purifierLegacyMaven.ownsPublication != null &&
+        gradle.ext.purifierLegacyMaven.ownsPublication(project, publication)
+}
 
 // Documentation links are native Javadoc inputs, not Maven dependencies.
 // Preserve the public link URL while replaying only its locked link metadata.
@@ -481,6 +489,7 @@ allprojects { project ->
         selectProvided(project.buildscript.configurations)
         project.plugins.withId('maven-publish') {
             project.publishing.publications.withType(MavenPublication).configureEach { publication ->
+                if (internalLegacyPublication(project, publication)) return
                 publication.versionMapping { allVariants { fromResolutionResult() } }
             }
         }
@@ -501,6 +510,7 @@ allprojects { project ->
             if (!gradle.ext.has('purifierLegacyMaven')) {
                 gradle.ext.purifierLegacyMaven = [mode: mode, output: output,
                     bindings: legacyBindings,
+                    captureMetadata: System.getenv('GRADLE_PURIFIER_LEGACY_METADATA_CAPTURE') == '1',
                     repository: setting('GRADLE_PURIFIER_PUBLICATION_REPOSITORY'), catalog: setting('GRADLE_PURIFIER_PUBLICATION_CATALOG'),
                     artifacts: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_ARTIFACTS') ?: '{}')]
                 apply from: new File(purifierScriptDirectory, 'legacy-maven.init.gradle')
@@ -554,8 +564,12 @@ allprojects { project ->
         task.dependsOn { project.configurations.findAll { PurifierRuntime.runtime(it) } }
         task.doLast { PurifierRuntime.export(project, new File(outputDir, 'runtime-data.json')) }
         task.dependsOn(project.tasks.matching { t ->
-            t.name in ['publishAllPublicationsToPurifierRepository', 'purifierInstall', 'purifierNativeInstall', 'purifierArchives', 'purifierLegacySnapshot'] ||
+            t.name in ['purifierInstall', 'purifierNativeInstall', 'purifierArchives', 'purifierLegacySnapshot', 'purifierLegacyMetadataSnapshot'] ||
                 (runCheck && t.name == 'check')
+        })
+        task.dependsOn(project.tasks.withType(PublishToMavenRepository).matching { publicationTask ->
+            publicationTask.repository.name == 'purifier' &&
+                !internalLegacyPublication(project, publicationTask.publication)
         })
     }
     // The archives of `assemble` go to archives/, under their keys. The
@@ -737,6 +751,7 @@ if (rootBuild && mode == 'publish') {
             def publishing = project.extensions.findByName('publishing')
             if (publishing == null) return
             publishing.publications.withType(MavenPublication).each { publication ->
+                if (internalLegacyPublication(project, publication)) return
                 def coordinate = "${publication.groupId}:${publication.artifactId}".toString()
                 def module = modules[coordinate]
                 if (built[idOf(project)] == null || module == null) {
@@ -803,9 +818,12 @@ if (rootBuild && mode == 'lock') {
     gradle.projectsEvaluated { g ->
         def projects = g.rootProject.allprojects.collect { project ->
             def publications = []
+            def legacyPublications = gradle.ext.has('purifierLegacyMaven') ?
+                gradle.ext.purifierLegacyMaven.describe(project) : []
             def publishing = project.extensions.findByName('publishing')
             if (publishing != null) {
                 publishing.publications.withType(MavenPublication).each { publication ->
+                    if (internalLegacyPublication(project, publication)) return
                     publications << [
                         name      : publication.name,
                         groupId   : publication.groupId,
@@ -819,7 +837,7 @@ if (rootBuild && mode == 'lock') {
                     ]
                 }
             }
-            if (gradle.ext.has('purifierLegacyMaven')) publications.addAll(gradle.ext.purifierLegacyMaven.describe(project))
+            publications.addAll(legacyPublications)
             def application = project.extensions.findByName('application')
             [
                 path        : project.path,

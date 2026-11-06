@@ -280,7 +280,7 @@ let
     isAttrs publication
     && validProjectPath project.path
     &&
-      builtins.attrNames publication == [
+      builtins.attrNames (builtins.removeAttrs publication [ "nativeMetadata" ]) == [
         "artifactId"
         "artifacts"
         "configuration"
@@ -290,6 +290,20 @@ let
         "uploadTask"
         "version"
       ]
+    && (
+      !(publication ? nativeMetadata)
+      || (
+        isAttrs publication.nativeMetadata
+        &&
+          builtins.attrNames publication.nativeMetadata == [
+            "kind"
+            "version"
+          ]
+        && publication.nativeMetadata.kind == "gradle-java-component"
+        && isInt publication.nativeMetadata.version
+        && publication.nativeMetadata.version == 1
+      )
+    )
     && publication.kind == "legacy-maven-upload"
     && publication.name == "legacyUploadArchives"
     && publication.configuration == "archives"
@@ -321,7 +335,12 @@ let
             publication:
             isAttrs publication
             && (
-              !(publication ? kind || publication ? uploadTask || publication ? configuration)
+              !(
+                publication ? kind
+                || publication ? uploadTask
+                || publication ? configuration
+                || publication ? nativeMetadata
+              )
               || isLegacyPublication project publication
             )
           ) project.publications

@@ -16,6 +16,19 @@ def safe = { value -> value instanceof String && value ==~ /[A-Za-z0-9_][A-Za-z0
 def projectPath = { value -> value instanceof String && (value == ':' ||
     (value.startsWith(':') && !value.endsWith(':') && !value.contains('::') && !value.contains('/') && !value.contains('\\') &&
      !value.any { Character.isISOControl((char) it) } && value.substring(1).split(':').every { !(it in ['.', '..']) })) }
+def metadataCapability = [kind: 'gradle-java-component', version: 1]
+def metadataRequested = { project ->
+    def bindings = context.bindings.findAll { it.path == project.path }
+    bindings.each { binding ->
+        if (binding.publication.containsKey('nativeMetadata') && binding.publication.nativeMetadata != metadataCapability)
+            fail('invalid native metadata capability')
+    }
+    context.captureMetadata == true || bindings.any { it.publication.containsKey('nativeMetadata') }
+}
+def metadataEngine = [:]
+context.nativeMetadataEngine = metadataEngine
+context.ownsPublication = { project, publication -> metadataEngine.owns != null && metadataEngine.owns(project, publication) }
+def metadataLoaded = false
 def configured = [:]
 def registered = [] as Set
 
@@ -97,14 +110,22 @@ def inspect = { project ->
     def version = pom.version == '0' ? project.version.toString() : pom.version
     if (![group, artifact, version].every(safe)) fail('invalid coordinates')
     if (version.endsWith('-SNAPSHOT')) fail('SNAPSHOT deployment is outside the proven release-only scope')
-    [task: task, deployer: deployer, descriptor: [kind: 'legacy-maven-upload', name: 'legacyUploadArchives', uploadTask: task.path,
+    def result = [task: task, deployer: deployer, descriptor: [kind: 'legacy-maven-upload', name: 'legacyUploadArchives', uploadTask: task.path,
         configuration: 'archives', groupId: group, artifactId: artifact, version: version, artifacts: [[classifier: null, extension: 'jar']]]]
+    if (metadataRequested(project)) result.descriptor.nativeMetadata = metadataCapability
+    result
 }
-def frozenPom = { project, file, module ->
+def frozenPom = { project, file, module, nativePom, strict ->
     def bytes = file.bytes
     def xml = new XmlSlurper().parseText(new String(bytes, 'UTF-8'))
     def coordinates = [GroupId: xml.groupId.text(), ArtifactId: xml.artifactId.text(), Version: xml.version.text(), Packaging: (xml.packaging.text() ?: 'jar')]
-    if ([coordinates.GroupId, coordinates.ArtifactId, coordinates.Version, coordinates.Packaging] != [module.group, module.name, module.version, 'jar']) fail('Nix POM coordinates differ from projected publication')
+    if (strict) {
+        def loader = nativePom.model.getClass().classLoader
+        def model = loader.loadClass('org.apache.maven.model.io.xpp3.MavenXpp3Reader').newInstance().read(new StringReader(new String(bytes,'UTF-8')))
+        def nativeProject = loader.loadClass('org.apache.maven.project.MavenProject').getConstructor(model.getClass()).newInstance(model)
+        coordinates = [GroupId:nativeProject.groupId,ArtifactId:nativeProject.artifactId,Version:nativeProject.version,Packaging:nativeProject.packaging]
+    }
+    if ([coordinates.GroupId, coordinates.ArtifactId, coordinates.Version, coordinates.Packaging] != [module.group, module.name, module.version, strict ? module.packaging : 'jar']) fail('Nix POM coordinates differ from projected publication')
     InvocationHandler handler = { proxy, method, args ->
         switch (method.name) {
             case 'toString': return 'PurifierFrozenLegacyPom'
@@ -135,6 +156,10 @@ def projectedInputs = { descriptor ->
             if (module.version.endsWith('-SNAPSHOT') || module.originalVersion.endsWith('-SNAPSHOT')) fail('SNAPSHOT deployment is outside the proven release-only scope')
         }
     }
+    if (descriptor.containsKey('nativeMetadata')) {
+        if (context.nativeInputs == null) apply from: new File(buildscript.sourceFile.parentFile, 'legacy-native-inputs.init.gradle')
+        return context.nativeInputs(descriptor,catalog)
+    }
     def moduleCoordinates = catalog.modules.collect { [it.group, it.name, it.version] } as Set
     if (!(catalog.publications instanceof List) || catalog.publications.size() != moduleCoordinates.size() ||
         (catalog.publications.collect { [it.group, it.name, it.version] } as Set) != moduleCoordinates) fail('unsupported projected publication closure; refusing to omit descriptors')
@@ -152,7 +177,7 @@ def projectedInputs = { descriptor ->
         // Do not drop Gradle strict metadata, classifiers or other artifacts.
         // Their native Upload mapping needs a distinct proof before acceptance.
         if (!unexpected.isEmpty()) fail('unsupported projected artifacts; refusing to discard metadata')
-        [module: module, jar: jar, pom: pom]
+        [module: module, jar: jar, pom: pom, artifacts:[[file:jar,extension:'jar',classifier:null]],strict:false]
     }
 }
 def deployments = []
@@ -174,9 +199,14 @@ def preflightDeployments = {
         if (current.task.repositories.size() != 1 || !current.task.repositories.withType(MavenDeployer).toList()[0].is(current.target) ||
             !current.target.getRepository().is(current.repository) || !current.target.getSnapshotRepository().is(current.snapshot)) fail('deployment target changed')
         def artifacts = current.configuration.allArtifacts.toList()
-        if (!current.task.configuration.is(current.configuration) || artifacts.size() != 1 || artifacts[0].file.canonicalFile != current.input.jar.canonicalFile ||
-            artifacts[0].name != current.input.module.name || artifacts[0].type != 'jar' || artifacts[0].extension != 'jar' || artifacts[0].classifier ||
-            !current.input.jar.isFile() || !current.input.pom.isFile() || !java.util.Arrays.equals(current.input.pom.bytes, current.frozen.bytes)) fail('publication inputs changed before deployment')
+        if (!current.task.configuration.is(current.configuration) || artifacts.size() != current.input.artifacts.size() ||
+            !current.input.pom.isFile() || !java.util.Arrays.equals(current.input.pom.bytes, current.frozen.bytes)) fail('publication inputs changed before deployment')
+        current.input.artifacts.each { accepted ->
+            def matches = artifacts.findAll { it.file.canonicalFile == accepted.file.canonicalFile && it.name == current.input.module.name &&
+                it.type == accepted.extension && it.extension == accepted.extension && (it.classifier ?: null) == accepted.classifier }
+            if (matches.size() != 1 || !accepted.file.isFile()) fail('publication inputs changed before deployment')
+            if (current.input.strict && java.security.MessageDigest.getInstance('SHA-256').digest(accepted.file.bytes).encodeHex().toString() != accepted.sha256) fail('publication artifact bytes changed before deployment')
+        }
     }
 }
 def configure
@@ -216,11 +246,16 @@ configure = { project ->
                 if (deployment.configuration != null || !deployment.repositories.isEmpty()) fail('custom generated Upload configuration or repositories are unsupported')
             }
             def configuration = project.configurations.create(configurationName)
-            project.artifacts.add(configuration.name, input.jar) { artifact -> artifact.name = input.module.name; artifact.type = 'jar'; artifact.extension = 'jar'; artifact.classifier = null }
+            input.artifacts.each { accepted ->
+                project.artifacts.add(configuration.name, accepted.file) { artifact ->
+                    artifact.name = input.module.name; artifact.type = accepted.extension
+                    artifact.extension = accepted.extension; artifact.classifier = accepted.classifier
+                }
+            }
             deployment.configuration = configuration
             def target = index == 0 ? deployer : deployment.repositories.mavenDeployer { }
             if (index != 0) { target.setRepository(repository); target.setSnapshotRepository(snapshotRepository); task.dependsOn(deployment) }
-            def frozen = frozenPom(project, input.pom, input.module)
+            def frozen = frozenPom(project, input.pom, input.module, target.pom, input.strict)
             target.pom = frozen.pom
             def record = [task: deployment, owner: task, source: deployer, target: target, repository: repository, snapshot: snapshotRepository,
                 configuration: configuration, input: input, frozen: frozen]
@@ -270,6 +305,13 @@ configure = { project ->
             def xml = new XmlSlurper().parse(pom)
             if ([xml.groupId.text(), xml.artifactId.text(), xml.version.text()] != [descriptor.groupId, descriptor.artifactId, descriptor.version]) fail('native snapshot POM coordinates changed')
         }
+    }
+    if (context.mode != 'publish' && descriptor.containsKey('nativeMetadata')) {
+        if (!metadataLoaded) {
+            apply from: new File(buildscript.sourceFile.parentFile, 'legacy-native-metadata.init.gradle')
+            metadataLoaded = true
+        }
+        metadataEngine.configure(project, found, project.tasks.getByName('purifierLegacySnapshot'), new File(new File(context.output, id), 'maven'), id)
     }
     configured[project.path] = found
     descriptor
