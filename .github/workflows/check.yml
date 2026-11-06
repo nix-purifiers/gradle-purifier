@@ -343,7 +343,7 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
       - name: Bind replay proof to candidate sources and immutable SDKs
         run: |
-          mkdir -p "$RUNNER_TEMP/gradle-replay-proof"
+          mkdir -p "$RUNNER_TEMP/gradle-replay-proof" "$RUNNER_TEMP/gradle-replay-distributions"
           git rev-parse HEAD > "$RUNNER_TEMP/gradle-replay-proof/source-revision"
           python - <<'PYTHON'
           from pathlib import Path
