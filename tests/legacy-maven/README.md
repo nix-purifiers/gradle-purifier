@@ -60,7 +60,11 @@ predicates, late mutations and implicit task dependencies. `publication-selectio
 compares native legacy/modern aggregate selection with unrelated unconfigured
 and different-target tasks, manual same-repository mirrors and missing publications.
 It retains real user publications, the aggregate node/actions, and direct, lazy
-and late dependencies, including a lazy target changed after helper setup. `metadata-unavailable.py`
+and late dependencies, including a lazy target changed after helper setup.
+An explicit user mirror of the owned publication is retained; only the native
+auto-created shadow task is excluded. Native immutable task-input dependency
+providers retain their original evaluation count. A late explicit dependency
+on the private deployment task fails before actions rather than disappearing. `metadata-unavailable.py`
 proves that an unsupported POM-only edge passes fresh locking, pure tests and raw
 release, while both strict Nix projection and CLI publication reject before deployment.
 

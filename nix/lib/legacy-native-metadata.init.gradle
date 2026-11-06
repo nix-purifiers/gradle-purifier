@@ -6,8 +6,6 @@ import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import org.gradle.api.Action
 import org.gradle.api.XmlProvider
-import org.gradle.api.tasks.TaskDependency
-import org.gradle.api.internal.tasks.DefaultTaskDependency
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
@@ -155,6 +153,10 @@ import org.gradle.api.publish.tasks.GenerateModuleMetadata
             def dependencies = gradle.taskGraph.getDependencies(record.finish)
             if (dependencies.size() != record.finishDependencies.size() || !dependencies.every { d -> record.finishDependencies.any { it.is(d) } }) fail('metadata snapshot task graph changed')
         }
+        if (record.shadowDeployment != null) {
+            if (!record.shadowDeployment.publication?.is(record.publication) || !record.shadowDeployment.repository?.is(record.shadowRepository)) fail('owned native deployment binding changed')
+            if (gradle.taskGraph.hasTask(record.shadowDeployment)) fail('owned native deployment entered capture graph')
+        }
         if (record.unsupported) return
         def publication = record.publication
         if (!isNativePublication(publication) || !owned.contains(publication) || !record.project.publishing.publications.findByName(name)?.is(publication) || !publication.component.is(record.component) ||
@@ -252,25 +254,25 @@ import org.gradle.api.publish.tasks.GenerateModuleMetadata
             entry.task.doFirst { preflight() }
             entry.actions=entry.task.actions.toList()
         }
-        // Keep the native aggregate and its user actions/dependencies. Only
-        // this helper's automatically registered deployment is private.
-        // Snapshot native dependency notation, including lazy user closures;
-        // resolve it with the same native resolver at graph construction.
+        // Keep the native aggregate and its user actions, inputs and lazy
+        // dependency notation. The proven native plugin adds one task-name
+        // edge for this exact auto-created publication/repository task.
         def aggregate = project.tasks.findByName('publishAllPublicationsToPurifierRepository')
         if (aggregate != null) {
-            def originalDependencies = aggregate.taskDependencies
-            def dependencyType = 'org.gradle.api.internal.tasks.DefaultTaskDependency'
-            if (originalDependencies.getClass().name != dependencyType) fail('unsupported native publication aggregate dependencies')
-            def retainedDependencies = new DefaultTaskDependency(
-                field(originalDependencies,dependencyType,'resolver'),
-                field(originalDependencies,dependencyType,'immutableValues'))
-            retainedDependencies.setValues(aggregate.dependsOn.toList())
-            TaskDependency filteredDependencies = { owner ->
-                retainedDependencies.getDependencies(owner).findAll { dependency ->
-                    !(dependency instanceof PublishToMavenRepository && engine.owns(project,dependency.publication))
-                } as Set
-            } as TaskDependency
-            aggregate.setDependsOn([filteredDependencies])
+            def shadowDeployment = project.tasks.getByName('publishPurifierLegacyMetadataPublicationToPurifierRepository')
+            def shadowRepository = project.publishing.repositories.getByName('purifier')
+            if (shadowDeployment.getClass().name != PublishToMavenRepository.name+'_Decorated' ||
+                !shadowDeployment.publication?.is(publication) || !shadowDeployment.repository?.is(shadowRepository)) fail('unsupported owned native deployment binding')
+            record.shadowDeployment=shadowDeployment;record.shadowRepository=shadowRepository
+            def notation=aggregate.dependsOn.toList()
+            def ownedEdges=notation.findAll { value ->
+                value instanceof String && value==shadowDeployment.name && project.tasks.getByName(value).is(shadowDeployment)
+            }
+            if (ownedEdges.size()!=1) fail('unsupported native aggregate shadow dependency')
+            // setDependsOn changes only mutable notation. Native resolver and
+            // immutable TaskInputs remain on the original dependency object;
+            // user providers share its native resolution context exactly once.
+            aggregate.setDependsOn(notation.findAll { !it.is(ownedEdges[0]) })
         }
         dependencies += [metadata,pomTask]
     }
