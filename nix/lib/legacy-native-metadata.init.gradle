@@ -6,6 +6,9 @@ import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import org.gradle.api.Action
 import org.gradle.api.XmlProvider
+import org.gradle.api.tasks.TaskDependency
+import org.gradle.api.internal.tasks.DefaultTaskDependency
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
@@ -248,6 +251,26 @@ import org.gradle.api.publish.tasks.GenerateModuleMetadata
         record.tasks.each { entry ->
             entry.task.doFirst { preflight() }
             entry.actions=entry.task.actions.toList()
+        }
+        // Keep the native aggregate and its user actions/dependencies. Only
+        // this helper's automatically registered deployment is private.
+        // Snapshot native dependency notation, including lazy user closures;
+        // resolve it with the same native resolver at graph construction.
+        def aggregate = project.tasks.findByName('publishAllPublicationsToPurifierRepository')
+        if (aggregate != null) {
+            def originalDependencies = aggregate.taskDependencies
+            def dependencyType = 'org.gradle.api.internal.tasks.DefaultTaskDependency'
+            if (originalDependencies.getClass().name != dependencyType) fail('unsupported native publication aggregate dependencies')
+            def retainedDependencies = new DefaultTaskDependency(
+                field(originalDependencies,dependencyType,'resolver'),
+                field(originalDependencies,dependencyType,'immutableValues'))
+            retainedDependencies.setValues(aggregate.dependsOn.toList())
+            TaskDependency filteredDependencies = { owner ->
+                retainedDependencies.getDependencies(owner).findAll { dependency ->
+                    !(dependency instanceof PublishToMavenRepository && engine.owns(project,dependency.publication))
+                } as Set
+            } as TaskDependency
+            aggregate.setDependsOn([filteredDependencies])
         }
         dependencies += [metadata,pomTask]
     }
