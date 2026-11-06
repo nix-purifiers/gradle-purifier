@@ -422,3 +422,82 @@ jobs:
             ${{ runner.temp }}/gradle-replay-proof/modern/*.txt
             ${{ runner.temp }}/gradle-replay-proof/modern/gradle-consumer/build.gradle
             ${{ runner.temp }}/gradle-replay-proof/modern/maven-consumer/pom.xml
+
+  legacy-maven:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Prepare immutable legacy proof inputs
+        run: |
+          mkdir -p "$RUNNER_TEMP/gradle-legacy-proof" "$RUNNER_TEMP/gradle-legacy-distributions"
+          git rev-parse HEAD > "$RUNNER_TEMP/gradle-legacy-proof/source-revision"
+          python - <<'PYTHON'
+          from pathlib import Path
+          import hashlib,json,os,subprocess
+          files=subprocess.check_output(['git','ls-files'],text=True).splitlines()
+          Path(os.environ['RUNNER_TEMP'],'gradle-legacy-proof/source-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files if Path(p).is_file()},indent=2))
+          PYTHON
+          nix build .#default --out-link "$RUNNER_TEMP/gradle-legacy-candidate"
+          nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk11_headless' 'nixpkgs#jdk17_headless' 'nixpkgs#maven' --no-link
+          # shellcheck disable=SC2016
+          nix eval --impure --json --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+                describe = j: { path = toString j; home = j.home or "${j}/lib/openjdk"; version = j.version; };
+            in { java8 = describe p.jdk8_headless; java11 = describe p.jdk11_headless; java17 = describe p.jdk17_headless; }
+          ' > "$RUNNER_TEMP/gradle-legacy-proof/sdks.json"
+          nix eval --impure --raw --expr '
+            let f = builtins.getFlake (toString ./.);
+                p = import f.inputs.nixpkgs { system = builtins.currentSystem; config = {}; overlays = []; };
+            in p.maven.outPath
+          ' > "$RUNNER_TEMP/gradle-legacy-proof/maven-path.txt"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Original legacy publication through cold Nix build and deployment
+        run: |
+          python tests/legacy-maven/lifecycle.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-legacy-distributions" \
+            --output "$RUNNER_TEMP/gradle-legacy-proof/plain"
+      - name: Preserve projected closure and consume only the deployment
+        run: |
+          maven=$(cat "$RUNNER_TEMP/gradle-legacy-proof/maven-path.txt")
+          python tests/legacy-maven/metadata.py \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-legacy-distributions" \
+            --maven "$maven/bin/mvn" --output "$RUNNER_TEMP/gradle-legacy-proof/metadata"
+      - name: Native semantics, public bindings and immutable companion boundaries
+        run: |
+          project="$RUNNER_TEMP/gradle-legacy-proof/plain/cold"
+          gradle="$project/.gradle-purifier/distribution/bin/gradle"
+          python tests/legacy-maven/native.py --gradle "$gradle" \
+            --sdk-info "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/native"
+          python tests/legacy-maven/parent.py --gradle "$gradle" \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/parent"
+          python tests/legacy-maven/schema.py --project "$project" --output "$RUNNER_TEMP/gradle-legacy-proof/schema"
+          python tests/legacy-maven/companion.py --project "$project" --gradle "$gradle" \
+            --cli "$RUNNER_TEMP/gradle-legacy-candidate/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/companion"
+          python tests/legacy-maven/negative.py --project "$RUNNER_TEMP/gradle-legacy-proof/metadata/cold" \
+            --publication "$RUNNER_TEMP/gradle-legacy-proof/metadata/cold/.gradle-purifier/publication" \
+            --gradle "$gradle" --sdks "$RUNNER_TEMP/gradle-legacy-proof/sdks.json" --output "$RUNNER_TEMP/gradle-legacy-proof/guards"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: gradle-legacy-maven
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/gradle-legacy-proof/**/*.json
+            ${{ runner.temp }}/gradle-legacy-proof/**/*.log
+            ${{ runner.temp }}/gradle-legacy-proof/**/*.txt
+            ${{ runner.temp }}/gradle-legacy-proof/source-revision
+            ${{ runner.temp }}/gradle-legacy-proof/metadata/gradle-consumer/build.gradle
+            ${{ runner.temp }}/gradle-legacy-proof/metadata/maven-consumer/pom.xml

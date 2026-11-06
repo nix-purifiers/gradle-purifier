@@ -288,7 +288,8 @@ let
     dontStrip = true;
   };
 
-  initScript = ./purifier.init.gradle;
+  # Keep lazy companions beside the immutable common script in sandbox builds.
+  initScript = "${./.}/purifier.init.gradle";
   portal = "https/plugins.gradle.org/m2";
 
   # The Gradle invocation shared by every build; the lock run (`gradle-purifier
@@ -299,6 +300,27 @@ let
     export HOME="$TMPDIR/home"
     export GRADLE_USER_HOME="$TMPDIR/gradle-home"
     export GRADLE_PURIFIER_MODE=sandbox
+    export GRADLE_PURIFIER_LEGACY_PUBLICATIONS=${
+      lib.escapeShellArg (
+        builtins.toJSON (
+          lib.concatMap (
+            project:
+            map
+              (publication: {
+                path = project.path;
+                publication = publication // {
+                  artifacts = map (artifact: builtins.removeAttrs artifact [ "key" ]) publication.artifacts;
+                };
+              })
+              (
+                builtins.filter (
+                  publication: publication.kind or null == "legacy-maven-upload"
+                ) project.publications
+              )
+          ) (builtins.attrValues lock.outputs)
+        )
+      )
+    }
     export GRADLE_PURIFIER_BUILD_ROOT="$PWD"
     export GRADLE_PURIFIER_REPOSITORY=file://${repository}
     export GRADLE_PURIFIER_RESOURCES=${

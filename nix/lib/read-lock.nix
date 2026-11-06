@@ -258,6 +258,117 @@ let
       else
         null;
 
+  isMavenComponent = value: isString value && match "[A-Za-z0-9_][A-Za-z0-9_.-]*" value != null;
+  validProjectPath =
+    value:
+    isString value
+    && (
+      value == ":"
+      || (
+        validTask value
+        && lib.all (
+          segment:
+          !(builtins.elem segment [
+            "."
+            ".."
+          ])
+        ) (lib.splitString ":" (lib.removePrefix ":" value))
+      )
+    );
+  isLegacyPublication =
+    project: publication:
+    isAttrs publication
+    && validProjectPath project.path
+    &&
+      builtins.attrNames publication == [
+        "artifactId"
+        "artifacts"
+        "configuration"
+        "groupId"
+        "kind"
+        "name"
+        "uploadTask"
+        "version"
+      ]
+    && publication.kind == "legacy-maven-upload"
+    && publication.name == "legacyUploadArchives"
+    && publication.configuration == "archives"
+    &&
+      publication.uploadTask
+      == (if project.path == ":" then ":uploadArchives" else "${project.path}:uploadArchives")
+    && lib.all isMavenComponent [
+      publication.groupId
+      publication.artifactId
+      publication.version
+    ]
+    &&
+      publication.artifacts == [
+        {
+          classifier = null;
+          extension = "jar";
+        }
+      ];
+  publicationProblem =
+    if
+      !(
+        isList (raw.projects or null)
+        && lib.all (
+          project:
+          isAttrs project
+          && isString (project.path or null)
+          && isList (project.publications or null)
+          && lib.all (
+            publication:
+            isAttrs publication
+            && (
+              !(publication ? kind || publication ? uploadTask || publication ? configuration)
+              || isLegacyPublication project publication
+            )
+          ) project.publications
+        ) raw.projects
+      )
+    then
+      "has an invalid typed publication binding"
+    else
+      let
+        legacy = lib.concatMap (
+          project:
+          map (publication: {
+            path = project.path;
+            inherit publication;
+          }) (filter (publication: publication.kind or null == "legacy-maven-upload") project.publications)
+        ) raw.projects;
+        keys = map (binding: binding.publication.uploadTask) legacy;
+        coordinates = map (
+          binding:
+          toJSON [
+            binding.publication.groupId
+            binding.publication.artifactId
+            binding.publication.version
+          ]
+        ) legacy;
+        distribution = baseNameOf (raw.distribution or "");
+        paths = map (project: project.path) raw.projects;
+        ids = map idOf paths;
+      in
+      if
+        builtins.length keys != builtins.length (lib.unique keys)
+        || builtins.length coordinates != builtins.length (lib.unique coordinates)
+        || (
+          legacy != [ ]
+          && (
+            distribution != "gradle-6.9.4-bin.zip"
+            || !(lib.all validProjectPath paths)
+            || !(validProjectPath ":${raw.rootProjectName}")
+            || builtins.length paths != builtins.length (lib.unique paths)
+            || builtins.length ids != builtins.length (lib.unique ids)
+          )
+        )
+      then
+        "has duplicate or unsupported legacy publication bindings"
+      else
+        null;
+
   # The first problem of the lockfile's structure, or null.
   structureProblem =
     if !isAttrs raw then
@@ -281,6 +392,8 @@ let
       "lacks a field of a gradle-purifier lockfile"
     else if !(lib.all isArtifact raw.artifacts) then
       "has an artifact that is neither { url, hash } nor { path, contents }"
+    else if publicationProblem != null then
+      publicationProblem
     else if projectJdkProblem != null then
       projectJdkProblem
     else if resourceProblem != null then

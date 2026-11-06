@@ -100,6 +100,7 @@ def konanProperties = setting('GRADLE_PURIFIER_KONAN_PROPERTIES')
 def konanDataDir = setting('GRADLE_PURIFIER_KONAN_DATA_DIR')
 def runCheck = System.getenv('GRADLE_PURIFIER_CHECK') == '1'
 def rootBuild = gradle.parent == null
+def purifierScriptDirectory = buildscript.sourceFile.parentFile
 
 // Documentation links are native Javadoc inputs, not Maven dependencies.
 // Preserve the public link URL while replaying only its locked link metadata.
@@ -487,6 +488,19 @@ allprojects { project ->
     project.buildscript.repositories.all(purify)
     project.repositories.all(purify)
 
+    if (rootBuild && mode in ['lock', 'sandbox', 'publish']) {
+        project.pluginManager.withPlugin('maven') {
+            if (!gradle.ext.has('purifierLegacyMaven')) {
+                gradle.ext.purifierLegacyMaven = [mode: mode, output: output,
+                    bindings: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_LEGACY_PUBLICATIONS') ?: '[]'),
+                    repository: setting('GRADLE_PURIFIER_PUBLICATION_REPOSITORY'), catalog: setting('GRADLE_PURIFIER_PUBLICATION_CATALOG'),
+                    artifacts: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_ARTIFACTS') ?: '{}')]
+                apply from: new File(purifierScriptDirectory, 'legacy-maven.init.gradle')
+            }
+            gradle.ext.purifierLegacyMaven.register(project)
+        }
+    }
+
     if (konanDataDir) {
         project.extensions.extraProperties.set('konan.data.dir', konanDataDir)
     }
@@ -532,7 +546,7 @@ allprojects { project ->
         task.dependsOn { project.configurations.findAll { PurifierRuntime.runtime(it) } }
         task.doLast { PurifierRuntime.export(project, new File(outputDir, 'runtime-data.json')) }
         task.dependsOn(project.tasks.matching { t ->
-            t.name in ['publishAllPublicationsToPurifierRepository', 'purifierInstall', 'purifierNativeInstall', 'purifierArchives'] ||
+            t.name in ['publishAllPublicationsToPurifierRepository', 'purifierInstall', 'purifierNativeInstall', 'purifierArchives', 'purifierLegacySnapshot'] ||
                 (runCheck && t.name == 'check')
         })
     }
@@ -797,6 +811,7 @@ if (rootBuild && mode == 'lock') {
                     ]
                 }
             }
+            if (gradle.ext.has('purifierLegacyMaven')) publications.addAll(gradle.ext.purifierLegacyMaven.describe(project))
             def application = project.extensions.findByName('application')
             [
                 path        : project.path,

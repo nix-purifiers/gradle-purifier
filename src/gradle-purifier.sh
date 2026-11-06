@@ -739,7 +739,7 @@ publish_command() {
   # project; excluding the task with -x leaves them out.
   local excluded=() locked_args=()
   mapfile -t excluded < <(jq -r '.projects[] | (if .path == ":" then "" else .path end) as $p
-    | .publications[] | "-x", "\($p):generateMetadataFileFor\(.name[0:1] | ascii_upcase)\(.name[1:])Publication"' "$lockfile")
+    | .publications[] | select((.kind // "") != "legacy-maven-upload") | "-x", "\($p):generateMetadataFileFor\(.name[0:1] | ascii_upcase)\(.name[1:])Publication"' "$lockfile")
   mapfile -t locked_args < <(jq -r '.gradleArguments[]' "$lockfile")
   local gradle_flags=() publish_args_json
   publish_args_json=$(jq -n -c '$ARGS.positional' --args -- "${locked_args[@]}" "$@")
@@ -752,6 +752,7 @@ publish_command() {
     GRADLE_PURIFIER_BUILD_ROOT=$root \
     GRADLE_PURIFIER_REPOSITORY=file://$tree \
     GRADLE_PURIFIER_ARTIFACTS=$artifacts \
+    GRADLE_PURIFIER_LEGACY_PUBLICATIONS=$(jq -c '[.projects[] | .path as $path | .publications[] | select(.kind == "legacy-maven-upload") | {path:$path,publication:.}]' "$lockfile") \
     GRADLE_PURIFIER_PUBLICATION_REPOSITORY=$publication/repository \
     GRADLE_PURIFIER_PUBLICATION_CATALOG=$publication/catalog.json \
     exec "$distribution/bin/gradle" \
