@@ -392,6 +392,14 @@ jobs:
             --sdks "$RUNNER_TEMP/gradle-replay-proof/sdks.json" \
             --cache "$RUNNER_TEMP/gradle-replay-distributions" \
             --output "$RUNNER_TEMP/gradle-replay-proof/legacy"
+      - name: Preserve old archive locks until explicit publication relock
+        run: |
+          python tests/legacy-maven/old-lock-compat.py \
+            --cli "$RUNNER_TEMP/gradle-replay-candidate/bin/gradle-purifier" \
+            --baseline-cli "$RUNNER_TEMP/gradle-replay-baseline/bin/gradle-purifier" \
+            --sdks "$RUNNER_TEMP/gradle-replay-proof/sdks.json" \
+            --cache "$RUNNER_TEMP/gradle-replay-distributions" \
+            --output "$RUNNER_TEMP/gradle-replay-proof/old-lock-compat"
       - name: Publish projected metadata and resolve transitive consumers with the origin stopped
         run: |
           maven=$(cat "$RUNNER_TEMP/gradle-replay-proof/maven-path.txt")
@@ -417,6 +425,8 @@ jobs:
             ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.json
             ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.log
             ${{ runner.temp }}/gradle-replay-proof/legacy/candidate/*.txt
+            ${{ runner.temp }}/gradle-replay-proof/old-lock-compat/*.json
+            ${{ runner.temp }}/gradle-replay-proof/old-lock-compat/*.log
             ${{ runner.temp }}/gradle-replay-proof/modern/*.json
             ${{ runner.temp }}/gradle-replay-proof/modern/*.log
             ${{ runner.temp }}/gradle-replay-proof/modern/*.txt

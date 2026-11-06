@@ -715,6 +715,11 @@ publish_command() {
   [ -f "$lockfile" ] || die "the build has no $lockfile; run 'gradle-purifier lock'"
   local release tree jdk distribution publication
   release=$(build_attr release)
+  # Building release validates the lock before this publication check. Old
+  # archive-only locks remain buildable and opt into publication by relocking.
+  if ! jq -e '[.projects[].publications[]] | length > 0' "$lockfile" >/dev/null; then
+    die "the lock declares no Maven publications; run 'gradle-purifier lock --relock' before publishing"
+  fi
   publication=$(build_attr publication)
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)

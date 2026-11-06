@@ -490,9 +490,17 @@ allprojects { project ->
 
     if (rootBuild && mode in ['lock', 'sandbox', 'publish']) {
         project.pluginManager.withPlugin('maven') {
+            def legacyBindings = new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_LEGACY_PUBLICATIONS') ?: '[]')
+            if (!(legacyBindings instanceof List) || !legacyBindings.every { binding ->
+                binding instanceof Map && binding.keySet() == (['path', 'publication'] as Set) &&
+                    binding.path instanceof String && binding.publication instanceof Map && binding.publication.kind == 'legacy-maven-upload'
+            }) throw new GradleException('gradle-purifier: invalid legacy publication bindings; run gradle-purifier lock --relock')
+            // Old locks recorded archives but no legacy Maven publication.
+            // Their sandbox build must not invent or require a new binding.
+            if (mode == 'sandbox' && !legacyBindings.any { it.path == project.path }) return
             if (!gradle.ext.has('purifierLegacyMaven')) {
                 gradle.ext.purifierLegacyMaven = [mode: mode, output: output,
-                    bindings: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_LEGACY_PUBLICATIONS') ?: '[]'),
+                    bindings: legacyBindings,
                     repository: setting('GRADLE_PURIFIER_PUBLICATION_REPOSITORY'), catalog: setting('GRADLE_PURIFIER_PUBLICATION_CATALOG'),
                     artifacts: new JsonSlurper().parseText(System.getenv('GRADLE_PURIFIER_ARTIFACTS') ?: '{}')]
                 apply from: new File(purifierScriptDirectory, 'legacy-maven.init.gradle')

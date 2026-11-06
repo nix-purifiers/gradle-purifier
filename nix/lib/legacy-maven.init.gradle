@@ -194,7 +194,7 @@ configure = { project ->
     def deployer = found.deployer
     def id = project.path == ':' ? project.rootProject.name : project.path.substring(1).replace(':', '-')
     if (configured.values().findAll { it != null }.any { it.descriptor.groupId == descriptor.groupId && it.descriptor.artifactId == descriptor.artifactId && it.descriptor.version == descriptor.version }) fail('duplicate publication coordinates')
-    if (context.mode != 'lock' && (expected.size() != 1 || expected[0].publication != descriptor)) fail("publication binding changed for ${task.path}; run gradle-purifier lock")
+    if (context.mode != 'lock' && (expected.size() != 1 || expected[0].publication != descriptor)) fail("publication binding changed for ${task.path}; run gradle-purifier lock --relock")
     if (context.mode == 'publish') {
         if (!context.artifacts[id]) fail('no Nix package for locked publication')
         def inputs = projectedInputs(descriptor)
