@@ -2,14 +2,56 @@
 # SPDX-License-Identifier: MIT
 """Native inputs and projected runtime closures for ordinary downstream tools."""
 import argparse
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
+
+@contextmanager
+def owned_gradle_processes(temporary):
+    """Finish daemons registered only in this test's private user homes."""
+    owned = {}
+
+    def register(executable, home, environment):
+        home = Path(home).absolute()
+        assert home != temporary and home.is_relative_to(temporary), home
+        owned[home] = (Path(executable), dict(environment))
+
+    try:
+        yield register
+    finally:
+        original = sys.exception()
+        failures = []
+        for home, (executable, environment) in owned.items():
+            if not home.exists():
+                continue
+            try:
+                # Reject symlink redirection before touching any daemon registry.
+                assert home.resolve() == home and home.is_dir(), home
+                result = subprocess.run(
+                    [str(executable), '--gradle-user-home', str(home), '--stop'],
+                    cwd=temporary, env=dict(environment, GRADLE_USER_HOME=str(home)),
+                    stdin=subprocess.DEVNULL, text=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, timeout=40, check=True)
+                print('OWNED GRADLE SHUTDOWN:', home, result.stdout, flush=True)
+            except Exception as error:
+                print('OWNED GRADLE SHUTDOWN FAILED:', home, repr(error),
+                      'registry files:', sorted(str(p.relative_to(home))
+                       for p in (home / 'daemon').glob('*/*')), file=sys.stderr, flush=True)
+                failures.append(error)
+        if failures:
+            if original is not None:
+                for error in failures:
+                    original.add_note('Owned Gradle shutdown failed: ' + repr(error))
+            else:
+                raise ExceptionGroup('Owned Gradle shutdown failed', failures)
+
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -21,8 +63,9 @@ archive = json.loads(subprocess.check_output(['nix', 'flake', 'archive', '--json
     '--no-update-lock-file', 'git+file://' + str(root)], text=True))
 snapshot = str(Path(archive['path']).resolve(strict=True))
 assert Path(snapshot).is_dir(), snapshot
-with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as temporary:
-    temporary = Path(temporary)
+with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as temporary, \
+        owned_gradle_processes(Path(temporary).resolve()) as register_gradle:
+    temporary = Path(temporary).resolve()
     (temporary / 'source-archive.json').write_text(json.dumps(archive, indent=2))
     (temporary / 'source-path-info.json').write_text(subprocess.check_output(
         ['nix', 'path-info', '--json', snapshot], text=True))
@@ -69,6 +112,9 @@ with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as tempora
         env = dict(os.environ, GRADLE_USER_HOME=str(temporary / 'native-home'))
         def run(*arguments, cwd=project, environment=env):
             subprocess.run([str(value) for value in arguments], cwd=cwd, env=environment, check=True)
+        gradle = project / '.gradle-purifier/distribution/bin/gradle'
+        register_gradle(gradle, temporary / 'native-home', env)
+        register_gradle(gradle, project / '.gradle-purifier/lock-run/gradle-home', env)
         run(cli, 'lock', '--input', reference)
         data = json.loads((project / 'gradle-purifier.lock.json').read_text())
         assert len(data['projectInputs']) == 1
@@ -118,6 +164,7 @@ public final class Downstream { public static void main(String[] args) throws Ex
             <version>3.17.0</version></dependency></dependencies></project>''')
         plain = dict(os.environ, JAVA_HOME=str(tools / 'jdk'),
             GRADLE_USER_HOME=str(temporary / 'ordinary-gradle-home'))
+        register_gradle(gradle, temporary / 'ordinary-gradle-home', plain)
         run(tools / 'bin/mvn', '-B', '-Dmaven.repo.local=' + str(temporary / 'ordinary-m2'),
             'package', 'dependency:build-classpath', '-Dmdep.outputFile=classpath',
             cwd=downstream, environment=plain)
