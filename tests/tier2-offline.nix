@@ -39,7 +39,13 @@ pkgs.runCommand "petclinic-ordinary-offline"
     mkdir -p project/.gradle/purifier
     sed "s|@PROJECT@|$PWD/project|g" ${properties} > project/.gradle/purifier/prefetch.properties
     cd project
-    ./gradlew --no-daemon --info clean test bootJar
+    status=0
+    ./gradlew --no-daemon --info --stacktrace clean test bootJar || status=$?
+    if [ "$status" -ne 0 ]; then
+      python ${./tier2-diagnostics.py} --gradle-home "$GRADLE_USER_HOME" \
+        --project "$PWD" --tmpdir "$TMPDIR" || true
+      exit "$status"
+    fi
     test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1" || \
       test -z "$(ls -A "$GRADLE_USER_HOME/caches/modules-2/files-2.1")"
     mkdir -p "$out/test-results"
