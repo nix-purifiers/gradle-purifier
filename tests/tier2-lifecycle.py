@@ -90,6 +90,7 @@ def main():
         receipt['evidenceFiles'] = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in (Path(__file__), root / 'tests/tier2-offline.nix',
                          root / 'tests/tier2-diagnostics.py',
+                         root / 'tests/GradleSocketProbe.java',
                          root / '.github/workflows/tier2-runtime.yml')}
         receipt['sample'] = json.loads((root / 'tests/real-world/petclinic.json').read_text())
         source_ref = f'git+file://{root}?rev={receipt["sourceRevision"]}'

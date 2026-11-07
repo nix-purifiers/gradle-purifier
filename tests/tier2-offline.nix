@@ -44,6 +44,9 @@ pkgs.runCommand "petclinic-ordinary-offline"
     if [ "$status" -ne 0 ]; then
       python ${./tier2-diagnostics.py} --gradle-home "$GRADLE_USER_HOME" \
         --project "$PWD" --tmpdir "$TMPDIR" || true
+      if cp ${./GradleSocketProbe.java} "$TMPDIR/GradleSocketProbe.java"; then
+        "$JAVA_HOME/bin/java" "$TMPDIR/GradleSocketProbe.java" "$TMPDIR/GradleSocketProbe.java" || true
+      fi
       exit "$status"
     fi
     test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1" || \
