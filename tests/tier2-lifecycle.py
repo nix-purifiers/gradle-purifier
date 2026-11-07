@@ -173,9 +173,9 @@ def main():
                 # allowed, because Gradle workers/daemons require local sockets.
                 profile = work / 'offline.sb'
                 profile.write_text('(version 1)\n(allow default)\n(deny network*)\n'
-                    '(allow network-outbound (remote ip "127.0.0.1:*"))\n'
-                    '(allow network-bind (local ip "127.0.0.1:*"))\n'
-                    '(allow network-inbound (local ip "127.0.0.1:*"))\n'
+                    '(allow network-outbound (remote ip "localhost:*"))\n'
+                    '(allow network-bind (local ip "localhost:*"))\n'
+                    '(allow network-inbound (local ip "localhost:*"))\n'
                     '(allow network* (local unix-socket))\n'
                     '(allow network* (remote unix-socket))\n')
                 cut = ['/usr/bin/sandbox-exec', '-f', str(profile)]
