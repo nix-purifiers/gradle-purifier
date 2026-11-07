@@ -454,6 +454,8 @@ let
     in
     stdenvNoCC.mkDerivation (finalAttrs: {
       name = project.id;
+      # Gradle's file-lock listener needs loopback UDP even offline.
+      ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
       src = filteredSrc;
       outputs = [
         "out"
@@ -587,6 +589,7 @@ let
   # The `check` task of every project of the build, in the sandbox.
   tests = stdenvNoCC.mkDerivation {
     name = "${gradle.rootProjectName}-tests";
+    ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
     src = filteredSrc;
     dontConfigure = true;
     buildPhase = ''
