@@ -62,7 +62,7 @@ def main():
                 raise ValueError('Gradle arguments must be strings')
             data['gradleArguments'] = arguments
         else:
-            if args.attribute not in {'repository', 'jdk', 'distribution', 'sdkContext', 'konan',
+            if args.attribute not in {'repository', 'jdk', 'distribution', 'upstreamDistribution', 'sdkContext', 'konan',
                                       'release', 'publication', 'tests'}:
                 raise ValueError('unsupported project build attribute')
             data['attribute'] = args.attribute
