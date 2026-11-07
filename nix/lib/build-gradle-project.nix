@@ -321,7 +321,7 @@ let
   };
   distributionInfo =
     if stdenvNoCC.hostPlatform.isDarwin then
-      (callPackage ../darwin-worker-transport { }) { inherit upstreamDistribution distributionEntry; }
+      (callPackage ./darwin-worker-transport { }) { inherit upstreamDistribution distributionEntry; }
     else
       {
         distribution = upstreamDistribution;
