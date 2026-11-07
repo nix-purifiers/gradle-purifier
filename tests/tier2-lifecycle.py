@@ -154,8 +154,18 @@ def main():
             shutil.copytree(project, source, ignore=shutil.ignore_patterns(
                 '.git', '.gradle', '.gradle-purifier', 'build'))
             properties = work / 'prefetch.properties'
-            properties.write_text((project / '.gradle/purifier/prefetch.properties')
-                .read_text().replace(str(project), '@PROJECT@'))
+            # macOS /var aliases /private/var; prefetch writes canonical paths.
+            # Replace the canonical prefix first so no /private prefix survives.
+            captured_properties = (project / '.gradle/purifier/prefetch.properties').read_bytes()
+            (output / 'prefetch-captured.properties').write_bytes(captured_properties)
+            receipt['capturedPrefetchPropertiesSha256'] = hashlib.sha256(captured_properties).hexdigest()
+            relocated = captured_properties.decode()
+            for project_path in sorted({str(project.resolve()), str(project)}, key=len, reverse=True):
+                relocated = relocated.replace(project_path, '@PROJECT@')
+            for key in ('lockFile', 'gradle.purifier.resources'):
+                assert f'{key}=@PROJECT@/gradle-purifier.lock.json' in relocated.splitlines(), key
+            assert str(project) not in relocated and str(project.resolve()) not in relocated
+            properties.write_text(relocated)
             bindings = {
                 'jdk': str(jdk), 'distribution': str((project / '.gradle-purifier/distribution').resolve()),
                 'library': str((project / '.gradle-purifier/lib').resolve()),
