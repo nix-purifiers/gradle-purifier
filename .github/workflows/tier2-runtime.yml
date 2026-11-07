@@ -47,7 +47,7 @@ jobs:
         if: matrix.gradle == '9.9.0'
         run: |
           system=$(nix eval --impure --raw --expr builtins.currentSystem)
-          nix build --no-link --max-jobs 2 --print-build-logs \
+          nix build --no-link --max-jobs 2 --cores 2 --print-build-logs \
             ".#checks.$system.java-library" ".#checks.$system.kotlin-core" \
             ".#checks.$system.kotlin-shared" ".#checks.$system.kotlin-app" \
             ".#checks.$system.kotlin-app-runs"
