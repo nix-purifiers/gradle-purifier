@@ -14,6 +14,8 @@
 }:
 pkgs.runCommand "petclinic-ordinary-offline"
   {
+    # Gradle's file-lock listener needs loopback UDP even for offline builds.
+    ${if pkgs.stdenv.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
     nativeBuildInputs = [ pkgs.python3 ];
     # Preserve the realized closure named by the prefetch properties/symlinks.
     buildInputs = [
