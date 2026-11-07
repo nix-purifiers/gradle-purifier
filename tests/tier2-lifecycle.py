@@ -48,10 +48,10 @@ def main():
         command = [str(arg) for arg in command]
         print(f'== {name}: {shlex.join(command)}', flush=True)
         step_env = env | (extra or {})
-        with (output / f'{name}.log').open('w') as log:
+        stdout_path = output / f'{name}.stdout'
+        with (output / f'{name}.log').open('w') as log, stdout_path.open('w') as stdout:
             result = subprocess.run(command, cwd=cwd, env=step_env,
-                                    stdout=subprocess.PIPE, stderr=log, text=True)
-        (output / f'{name}.stdout').write_text(result.stdout)
+                                    stdout=stdout, stderr=log, text=True)
         receipt['commands'].append({'name': name, 'argv': command,
                                     'cwd': str(cwd), 'environment': extra or {},
                                     'exitCode': result.returncode})
@@ -59,7 +59,7 @@ def main():
         if result.returncode:
             print((output / f'{name}.log').read_text()[-16000:], file=sys.stderr)
             raise RuntimeError(f'{name} failed: {result.returncode}')
-        return result.stdout.strip()
+        return stdout_path.read_text().strip()
 
     def build_check(name, expression):
         (output / f'{name}.nix').write_text(expression + '\n')
@@ -67,7 +67,8 @@ def main():
                   '--expr', f'({expression}).drvPath'])
         run(f'{name}-derivation-json', ['nix', 'derivation', 'show', drv])
         result = json.loads(run(name, ['nix', 'build', '--impure', '--expr', expression,
-            '--option', 'sandbox', 'true', '--no-link', '--json', '--print-build-logs']))
+            '--option', 'sandbox', 'true', '--option', 'max-jobs', '2', '--option', 'cores', '2',
+            '--no-link', '--json', '--print-build-logs']))
         assert result[0]['drvPath'] == drv
         built = Path(result[0]['outputs']['out'])
         info = json.loads(run(f'{name}-path-info', ['nix', 'path-info', '--json', built]))
@@ -78,16 +79,25 @@ def main():
     try:
         receipt['sourceRevision'] = run('source', ['git', 'rev-parse', 'HEAD'])
         receipt['sourceDiff'] = run('source-diff', ['git', 'diff', '--binary', 'HEAD'])
+        assert not receipt['sourceDiff'], 'freeze tracked source before collecting evidence'
         receipt['harnessSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         receipt['evidenceFiles'] = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in (Path(__file__), root / 'tests/tier2-offline.nix',
                          root / '.github/workflows/tier2-runtime.yml')}
         receipt['sample'] = json.loads((root / 'tests/real-world/petclinic.json').read_text())
+        source_ref = f'git+file://{root}?rev={receipt["sourceRevision"]}'
+        archive = json.loads(run('source-archive', ['nix', 'flake', 'archive', '--json',
+            '--no-update-lock-file', source_ref]))
+        archived_root = Path(archive['path']).resolve(strict=True)
+        assert archived_root.is_dir() and (archived_root / 'flake.nix').is_file()
+        receipt['sourceArchive'] = archive
+        receipt['sourcePathInfo'] = json.loads(run('source-path-info', ['nix', 'path-info', '--json', archived_root]))
         system = run('system', ['nix', 'eval', '--impure', '--raw', '--expr', 'builtins.currentSystem'])
         receipt['nixSystem'] = system
         expected = {'Linux': {'x86_64-linux', 'aarch64-linux'}, 'Darwin': {'aarch64-darwin'}}
         assert system in expected[platform.system()], (platform.system(), system)
-        cli = Path(run('cli', ['nix', 'build', '.#gradle-purifier', '--no-link', '--print-out-paths'])) / 'bin/gradle-purifier'
+        cli = Path(run('cli', ['nix', 'build', f'{source_ref}#gradle-purifier',
+            '--option', 'max-jobs', '2', '--option', 'cores', '2', '--no-link', '--print-out-paths'])) / 'bin/gradle-purifier'
         receipt['cli'] = str(cli)
         with tempfile.TemporaryDirectory(prefix='gradle-tier2-') as temporary:
             work = Path(temporary)
@@ -143,10 +153,10 @@ def main():
             receipt['prefetchBindings'] = bindings
             receipt['prefetchPropertiesSha256'] = hashlib.sha256(properties.read_bytes()).hexdigest()
             shutil.copy2(properties, output / 'prefetch.properties')
-            prefix = ('let f = builtins.getFlake ' + json.dumps(str(root)) + '; '
+            prefix = ('let f = builtins.getFlake ' + json.dumps(str(archived_root)) + '; '
                 'p = import f.inputs.nixpkgs { system = builtins.currentSystem; '
                 'overlays = [ f.overlays.default ]; }; in ')
-            offline_expression = prefix + '(import (builtins.toPath ' + json.dumps(str(root / 'tests/tier2-offline.nix')) + ') { pkgs = p; '
+            offline_expression = prefix + '(import (builtins.toPath ' + json.dumps(str(archived_root / 'tests/tier2-offline.nix')) + ') { pkgs = p; '
             offline_expression += ''.join(f'{key} = builtins.storePath {json.dumps(value)}; ' for key, value in bindings.items())
             offline_expression += ('javaHome = ' + json.dumps(str(java_home)) + '; '
                 'src = builtins.path { path = ' + json.dumps(str(source)) + '; name = "petclinic-tier2-source"; }; '
@@ -160,14 +170,27 @@ def main():
                 # allowed, because Gradle workers/daemons require local sockets.
                 profile = work / 'offline.sb'
                 profile.write_text('(version 1)\n(allow default)\n(deny network*)\n'
-                    '(allow network* (local ip "localhost:*"))\n'
-                    '(allow network* (remote ip "localhost:*"))\n')
+                    '(allow network-outbound (remote ip "127.0.0.1:*"))\n'
+                    '(allow network-bind (local ip "127.0.0.1:*"))\n'
+                    '(allow network-inbound (local ip "127.0.0.1:*"))\n'
+                    '(allow network* (local unix-socket))\n'
+                    '(allow network* (remote unix-socket))\n')
                 cut = ['/usr/bin/sandbox-exec', '-f', str(profile)]
                 shutil.copy2(profile, output / 'offline.sb')
             else:
                 cut = ['unshare', '-rn', 'sh', '-c', 'ip link set lo up && exec "$@"', 'sh']
             run('network-positive', [sys.executable, '-c',
                 'import socket\nwith socket.create_connection(("1.1.1.1",443),timeout=10):\n print("external socket reachable")'])
+            run('loopback-control', cut + [sys.executable, '-c',
+                'import http.server,threading,urllib.request\n'
+                'class Handler(http.server.BaseHTTPRequestHandler):\n'
+                ' def do_GET(self):\n'
+                '  self.send_response(200);self.end_headers();self.wfile.write(b"loopback allowed")\n'
+                'server=http.server.HTTPServer(("127.0.0.1",0),Handler)\n'
+                'threading.Thread(target=server.serve_forever,daemon=True).start()\n'
+                'with urllib.request.urlopen("http://127.0.0.1:%d/"%server.server_port,timeout=5) as r:\n'
+                ' assert r.read()==b"loopback allowed"\n'
+                'server.shutdown();print("loopback HTTP allowed")'])
             # Prove the isolation primitive actually denies the same socket.
             run('network-control', cut + [sys.executable, '-c',
                 'import socket\ntry:\n socket.create_connection(("1.1.1.1",443),timeout=5)\n'
