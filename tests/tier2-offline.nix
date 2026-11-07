@@ -45,12 +45,14 @@ pkgs.runCommand "petclinic-ordinary-offline"
       # denials under precisely the same sandbox before changing stack choice.
       cp ${./GradleSocketProbe.java} "$TMPDIR/GradleSocketProbe.java"
       "$JAVA_HOME/bin/java" "$TMPDIR/GradleSocketProbe.java" "$TMPDIR/GradleSocketProbe.java" > transport-baseline.log 2>&1
+      head -c 16384 transport-baseline.log
       test "$(grep -c '^external .* DENIED kind=${
         if pkgs.stdenv.hostPlatform.isDarwin then "permission" else "namespace"
       }' transport-baseline.log)" -eq 3
       export JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS -Djava.net.preferIPv4Stack=true"
       probeStatus=0
       "$JAVA_HOME/bin/java" "$TMPDIR/GradleSocketProbe.java" "$TMPDIR/GradleSocketProbe.java" > transport-ipv4.log 2>&1 || probeStatus=$?
+      head -c 16384 transport-ipv4.log
       # Explicit IPv6 channels can be unavailable in the IPv4-only experiment;
       # retain that observation rather than counting it as an external denial.
       test "$probeStatus" -eq 0 || test "$probeStatus" -eq 2
