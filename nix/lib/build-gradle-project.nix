@@ -336,6 +336,11 @@ let
   runGradle = tasks: ''
     export HOME="$TMPDIR/home"
     export GRADLE_USER_HOME="$TMPDIR/gradle-home"
+    ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin ''
+      # Seatbelt rejects IPv4-mapped IPv6 loopback connects used by the JVM.
+      # Apply to the launcher, daemon and workers inside this Nix build only.
+      export JAVA_TOOL_OPTIONS="''${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Djava.net.preferIPv4Stack=true"
+    ''}
     export GRADLE_PURIFIER_MODE=sandbox
     export GRADLE_PURIFIER_LEGACY_PUBLICATIONS=${
       lib.escapeShellArg (

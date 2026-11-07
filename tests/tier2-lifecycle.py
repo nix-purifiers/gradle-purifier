@@ -183,29 +183,14 @@ def main():
                 'src = builtins.path { path = ' + json.dumps(str(source)) + '; name = "petclinic-tier2-source"; }; '
                 'properties = builtins.path { path = ' + json.dumps(str(properties)) + '; name = "prefetch.properties"; }; '
                 'wrapperHome = builtins.path { path = ' + json.dumps(str(work / 'gradle-home/wrapper')) + '; name = "wrapper-home"; }; })')
-            try:
-                offline_built = build_check('ordinary-offline-check', offline_expression)
-            except RuntimeError as baseline_error:
-                if (platform.system() == 'Darwin'
-                        and receipt['commands'][-1]['name'] == 'ordinary-offline-check'):
-                    # Preserve the actual baseline failure. This separate cold
-                    # derivation is a test experiment, not a production fix.
-                    receipt['baselineOrdinaryFailure'] = str(baseline_error)
-                    receipt['ipv4ExperimentMode'] = 'darwin-test-only'
-                    control_expression = offline_expression.replace(
-                        '{ pkgs = p; ', '{ pkgs = p; ipv4Experiment = true; ', 1)
-                    try:
-                        control = build_check('ordinary-ipv4-experiment', control_expression)
-                        shutil.copy2(control / 'receipt.json', output / 'ipv4-experiment-receipt.json')
-                        shutil.copytree(control / 'test-results', output / 'ipv4-experiment-test-results')
-                        for name in ('transport-baseline.log', 'transport-ipv4.log'):
-                            shutil.copy2(control / name, output / name)
-                    except Exception as control_error:
-                        receipt['ipv4ExperimentError'] = str(control_error)
-                    save()
-                raise
+            offline_built = build_check('ordinary-offline-check', offline_expression)
             shutil.copy2(offline_built / 'receipt.json', output / 'ordinary-offline-receipt.json')
             shutil.copytree(offline_built / 'test-results', output / 'ordinary-offline-test-results')
+            receipt['darwinNixIPv4Stack'] = platform.system() == 'Darwin'
+            if receipt['darwinNixIPv4Stack']:
+                for name in ('transport-baseline.log', 'transport-ipv4.log'):
+                    shutil.copy2(offline_built / name, output / name)
+            save()
             if platform.system() == 'Darwin':
                 # File access remains normal. Only loopback network traffic is
                 # allowed, because Gradle workers/daemons require local sockets.

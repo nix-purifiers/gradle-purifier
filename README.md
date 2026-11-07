@@ -207,6 +207,15 @@ builder's result has these attributes:
 - `fetches` lists the downloads of the build as entries of the
   nix-purifiers library, for SBOM, license and vulnerability tools.
 
+On Darwin, sandboxed Nix builds allow local networking for Gradle's daemon
+and file-lock listener. The builder appends `-Djava.net.preferIPv4Stack=true`
+to `JAVA_TOOL_OPTIONS` inside the build: Seatbelt rejects the JVM's
+IPv4-mapped IPv6 loopback connections. This applies to every child JVM,
+including Gradle workers and tests, and makes explicit IPv6 sockets
+unavailable there. External network access remains denied. Capture,
+prefetch, and ordinary working-tree commands outside Nix builds keep their
+normal JVM stack selection. Linux builds keep their normal stack selection.
+
 The builder takes these arguments besides `src`, the root of the build:
 
 - `lockFile` is the lockfile; the default is `gradle-purifier.lock.json`

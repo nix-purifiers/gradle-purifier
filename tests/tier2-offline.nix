@@ -11,7 +11,6 @@
   repository,
   properties,
   wrapperHome,
-  ipv4Experiment ? false,
 }:
 pkgs.runCommand "petclinic-ordinary-offline"
   {
@@ -40,9 +39,9 @@ pkgs.runCommand "petclinic-ordinary-offline"
     mkdir -p project/.gradle/purifier
     sed "s|@PROJECT@|$PWD/project|g" ${properties} > project/.gradle/purifier/prefetch.properties
     cd project
-    ${pkgs.lib.optionalString ipv4Experiment ''
-      # Test-only A/B: the unflagged JDK must still observe all three external
-      # denials under precisely the same sandbox before changing stack choice.
+    ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      # Keep the unadapted family observations and external denials before
+      # applying the same Darwin Nix-build transport choice as the builder.
       cp ${./GradleSocketProbe.java} "$TMPDIR/GradleSocketProbe.java"
       "$JAVA_HOME/bin/java" "$TMPDIR/GradleSocketProbe.java" "$TMPDIR/GradleSocketProbe.java" > transport-baseline.log 2>&1
       head -c 16384 transport-baseline.log
@@ -53,7 +52,7 @@ pkgs.runCommand "petclinic-ordinary-offline"
       probeStatus=0
       "$JAVA_HOME/bin/java" "$TMPDIR/GradleSocketProbe.java" "$TMPDIR/GradleSocketProbe.java" > transport-ipv4.log 2>&1 || probeStatus=$?
       head -c 16384 transport-ipv4.log
-      # Explicit IPv6 channels can be unavailable in the IPv4-only experiment;
+      # Explicit IPv6 channels can be unavailable with the IPv4-only JVM stack;
       # retain that observation rather than counting it as an external denial.
       test "$probeStatus" -eq 0 || test "$probeStatus" -eq 2
       grep -q '^java.net.preferIPv4Stack: true$' transport-ipv4.log
@@ -77,7 +76,7 @@ pkgs.runCommand "petclinic-ordinary-offline"
     test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1" || \
       test -z "$(ls -A "$GRADLE_USER_HOME/caches/modules-2/files-2.1")"
     mkdir -p "$out/test-results"
-    ${pkgs.lib.optionalString ipv4Experiment ''
+    ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
       cp transport-baseline.log transport-ipv4.log "$out/"
     ''}
     python - "$out" <<'PY'
@@ -95,8 +94,8 @@ pkgs.runCommand "petclinic-ordinary-offline"
     assert counts['tests'] > counts['skipped'] and counts['failures'] == counts['errors'] == 0, counts
     jars = list(Path('build/libs').glob('*.jar'))
     assert jars, 'ordinary wrapper produced no JAR'
-    receipt = {'tests': counts, 'downloadCacheEmpty': True, 'ipv4Experiment': ${
-      if ipv4Experiment then "True" else "False"
+    receipt = {'tests': counts, 'downloadCacheEmpty': True, 'darwinNixIPv4Stack': ${
+      if pkgs.stdenv.hostPlatform.isDarwin then "True" else "False"
     },
                'jars': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in jars}}
     (Path(sys.argv[1]) / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
