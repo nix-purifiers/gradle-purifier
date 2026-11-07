@@ -94,6 +94,9 @@ def main():
         receipt['sourcePathInfo'] = json.loads(run('source-path-info', ['nix', 'path-info', '--json', archived_root]))
         system = run('system', ['nix', 'eval', '--impure', '--raw', '--expr', 'builtins.currentSystem'])
         receipt['nixSystem'] = system
+        receipt['sandboxSetting'] = run('sandbox-config', ['nix', 'config', 'show', 'sandbox',
+                                                        '--option', 'sandbox', 'true'])
+        assert receipt['sandboxSetting'] == 'true', receipt['sandboxSetting']
         expected = {'Linux': {'x86_64-linux', 'aarch64-linux'}, 'Darwin': {'aarch64-darwin'}}
         assert system in expected[platform.system()], (platform.system(), system)
         cli = Path(run('cli', ['nix', 'build', f'{source_ref}#gradle-purifier',

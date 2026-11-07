@@ -17,12 +17,17 @@ parser.add_argument('--maven-producer', help='Nix reference to the real Maven mu
 args = parser.parse_args()
 system = subprocess.check_output(['nix', 'eval', '--impure', '--raw', '--expr',
                                   'builtins.currentSystem'], text=True).strip()
-snapshot = json.loads(subprocess.check_output(['nix', 'flake', 'metadata', '--json',
-    '--no-write-lock-file', 'path:' + str(root)], text=True))['path']
+archive = json.loads(subprocess.check_output(['nix', 'flake', 'archive', '--json',
+    '--no-update-lock-file', 'git+file://' + str(root)], text=True))
+snapshot = str(Path(archive['path']).resolve(strict=True))
+assert Path(snapshot).is_dir(), snapshot
 with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as temporary:
     temporary = Path(temporary)
+    (temporary / 'source-archive.json').write_text(json.dumps(archive, indent=2))
+    (temporary / 'source-path-info.json').write_text(subprocess.check_output(
+        ['nix', 'path-info', '--json', snapshot], text=True))
     subprocess.run(['nix-store', '--add-root', str(temporary / 'source'), '--realise', snapshot], check=True)
-    package = subprocess.check_output(['nix', 'build', 'path:' + str(root) + '#default', '--print-out-paths',
+    package = subprocess.check_output(['nix', 'build', 'path:' + snapshot + '#default', '--print-out-paths',
         '--out-link', str(temporary / 'cli')], text=True).strip().splitlines()[-1]
     cli = Path(package) / 'bin/gradle-purifier'
     expression = '''let
@@ -35,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as tempora
     '' '''
     tools = Path(subprocess.check_output(['nix', 'build', '--impure', '--print-out-paths',
         '--out-link', str(temporary / 'tools'), '--expr', expression], text=True,
-        env=dict(os.environ, COMPOSITION_FLAKE=str(root))).strip())
+        env=dict(os.environ, COMPOSITION_FLAKE=snapshot)).strip())
     for transitive in (False, True):
         project = temporary / ('transitive' if transitive else 'direct')
         shutil.copytree(root / 'tests/fixtures/java-library', project)
