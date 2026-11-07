@@ -17,8 +17,8 @@ pkgs.runCommand "gradle-worker-transport-observation"
     export GRADLE_USER_HOME="$TMPDIR/gradle-home"
     export JAVA_HOME=${pkgs.lib.escapeShellArg javaHome}
     mkdir -p "$HOME" project "$out"
-    cp ${./fixtures/worker-transport/build.gradle} project/build.gradle
-    cp ${./fixtures/worker-transport/settings.gradle} project/settings.gradle
+    cp ${./worker-transport/build.gradle} project/build.gradle
+    cp ${./worker-transport/settings.gradle} project/settings.gradle
     cd project
     export JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true -Dpurifier.probe.unrelated=parent-only"
     export PURIFIER_PROBE_UNRELATED=parent-only
