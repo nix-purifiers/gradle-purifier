@@ -1,0 +1,33 @@
+import org.gradle.workers.*
+import groovy.json.JsonOutput
+import javax.inject.Inject
+
+abstract class ObserveWorkerTransport implements WorkAction<WorkParameters.None> {
+    void execute() {
+        println('PURIFIER_WORKER_TRANSPORT ' + JsonOutput.toJson([
+            javaHome: System.getProperty('java.home'),
+            javaVersion: System.getProperty('java.version'),
+            preferIPv4Stack: System.getProperty('java.net.preferIPv4Stack'),
+            javaToolOptions: System.getenv('JAVA_TOOL_OPTIONS'),
+            unrelatedProperty: System.getProperty('purifier.probe.unrelated'),
+            unrelatedEnvironment: System.getenv('PURIFIER_PROBE_UNRELATED'),
+            locale: System.getenv('LANG')]))
+    }
+}
+abstract class ProbeWorker extends DefaultTask {
+    @Inject abstract WorkerExecutor getWorkerExecutor()
+    @Input abstract Property<Boolean> getExplicitProperty()
+    @TaskAction void probe() {
+        def queue=workerExecutor.processIsolation {
+            if (explicitProperty.get()) forkOptions {
+                systemProperty 'java.net.preferIPv4Stack', 'true'
+            }
+        }
+        queue.submit(ObserveWorkerTransport) {}
+        queue.await()
+    }
+}
+tasks.register('inherited', ProbeWorker) { explicitProperty=false }
+tasks.register('explicit', ProbeWorker) { explicitProperty=true }
+
+tasks.named("inherited") { doFirst { println("PURIFIER_COMPONENT_ORIGIN " + org.gradle.workers.internal.DefaultProcessWorkerSpec.protectionDomain.codeSource.location) } }

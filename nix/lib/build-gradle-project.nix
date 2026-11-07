@@ -295,13 +295,13 @@ let
       export GRADLE_PURIFIER_KONAN_PROPERTIES="dynamicLinker.${konanHost}=${stdenv.cc.bintools.dynamicLinker}"
     '';
 
-  distribution = stdenvNoCC.mkDerivation {
+  distributionEntry =
+    lib.findFirst (e: e.path == gradle.distribution)
+      (throw "gradle-purifier: ${toString lockFile} names the Gradle distribution ${gradle.distribution}, which it does not hold; run 'gradle-purifier lock --relock'.")
+      entries;
+  upstreamDistribution = stdenvNoCC.mkDerivation {
     name = "gradle-${gradle.gradleVersion}";
-    src = fetchEntry (
-      lib.findFirst (e: e.path == gradle.distribution)
-        (throw "gradle-purifier: ${toString lockFile} names the Gradle distribution ${gradle.distribution}, which it does not hold; run 'gradle-purifier lock --relock'.")
-        entries
-    );
+    src = fetchEntry distributionEntry;
     nativeBuildInputs = [ unzip ];
     dontConfigure = true;
     dontBuild = true;
@@ -319,6 +319,18 @@ let
     # the start scripts' shebangs.
     dontStrip = true;
   };
+  distributionInfo =
+    if stdenvNoCC.hostPlatform.isDarwin then
+      (callPackage ../darwin-worker-transport { }) { inherit upstreamDistribution distributionEntry; }
+    else
+      {
+        distribution = upstreamDistribution;
+        variant = null;
+        provenance = null;
+      };
+  distribution = distributionInfo.distribution;
+  distributionVariant = distributionInfo.variant;
+  distributionProvenance = distributionInfo.provenance;
 
   # Keep lazy companions beside the immutable common script in sandbox builds.
   initScript = "${
@@ -555,7 +567,14 @@ let
         runHook postInstall
       '';
       passthru = {
-        inherit repository distribution lock;
+        inherit
+          repository
+          distribution
+          upstreamDistribution
+          distributionVariant
+          distributionProvenance
+          lock
+          ;
         gradleProject = project;
         projections = purifier.jvmProjections {
           repository = publicationRepository;
@@ -695,6 +714,9 @@ in
     lock
     repository
     distribution
+    upstreamDistribution
+    distributionVariant
+    distributionProvenance
     konan
     ;
   fetches = lock.entries;
