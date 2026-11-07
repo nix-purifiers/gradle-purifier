@@ -711,7 +711,7 @@ prefetch_command() {
   local tree jdk distribution
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
-  distribution=$(build_attr distribution)
+  distribution=$(build_attr upstreamDistribution)
   realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
@@ -828,7 +828,7 @@ publish_command() {
   publication=$(build_attr publication)
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
-  distribution=$(build_attr distribution)
+  distribution=$(build_attr upstreamDistribution)
   realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"

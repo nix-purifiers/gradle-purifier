@@ -254,6 +254,36 @@ def main():
                 'mkdir -p "$out/nix-support/test-results"\n'
                 'find build/test-results/test -name "TEST-*.xml" -exec cp {} "$out/nix-support/test-results/" \\;\n'
                 '\'\'; })')
+            sdk_expression = ('let package = (' + expression + '); in { '
+                'upstream = toString package.upstreamDistribution; '
+                'effective = toString package.distribution; '
+                'variant = package.distributionVariant; '
+                'provenance = package.distributionProvenance; }')
+            sdk = json.loads(run('pure-sdk-identity',
+                ['nix', 'eval', '--impure', '--json', '--expr', sdk_expression]))
+            receipt['pureSdk'] = sdk
+            assert sdk['upstream'] == bindings['distribution'], 'host prefetch must retain the official SDK'
+            effective_sdk = build_check('pure-effective-sdk', '(' + expression + ').distribution')
+            assert str(effective_sdk) == sdk['effective'], sdk
+            if sdk['variant'] is not None:
+                assert platform.system() == 'Darwin' and sdk['effective'] != sdk['upstream'], sdk
+                provenance = Path(sdk['provenance'])
+                shutil.copytree(provenance.parent, output / 'pure-sdk-provenance')
+                manifest = json.loads(provenance.read_text())
+                receipt['pureSdkInputPathInfo'] = json.loads(run('pure-sdk-input-path-info',
+                    ['nix', 'path-info', '--json', sdk['upstream'],
+                     manifest['sourcePath'], manifest['compilerRoot']]))
+            else:
+                assert sdk['effective'] == sdk['upstream'], sdk
+            worker_expression = (prefix + '(import (builtins.toPath ' + json.dumps(
+                str(archived_root / 'tests/tier2-worker-options.nix')) + ') { pkgs = p; '
+                'distribution = builtins.storePath ' + json.dumps(sdk['effective']) + '; '
+                'jdk = builtins.storePath ' + json.dumps(bindings['jdk']) + '; '
+                'javaHome = ' + json.dumps(str(java_home)) + '; '
+                'derived = ' + ('true' if sdk['variant'] is not None else 'false') + '; })')
+            worker = build_check('pure-worker-transport', worker_expression)
+            shutil.copy2(worker / 'receipt.json', output / 'pure-worker-transport-receipt.json')
+            shutil.copy2(worker / 'worker.log', output / 'pure-worker-transport.log')
             built = build_check('pure-build', expression)
             pure_reports = list((built / 'nix-support/test-results').glob('TEST-*.xml'))
             assert pure_reports, 'sandboxed package retained no test reports'

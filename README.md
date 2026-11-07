@@ -210,9 +210,23 @@ builder's result has these attributes:
 On Darwin, sandboxed Nix builds allow local networking for Gradle's daemon
 and file-lock listener. The builder appends `-Djava.net.preferIPv4Stack=true`
 to `JAVA_TOOL_OPTIONS` inside the build: Seatbelt rejects the JVM's
-IPv4-mapped IPv6 loopback connections. This applies to every child JVM,
-including Gradle workers and tests, and makes explicit IPv6 sockets
-unavailable there. External network access remains denied. Capture,
+IPv4-mapped IPv6 loopback connections. It affects JVMs that inherit that
+environment and makes explicit IPv6 sockets unavailable there.
+Process-isolated Gradle workers sanitize their environment. For the exact
+official Gradle 8.14.6 and 9.9.0 binary ZIP URL/hash pairs, Darwin Nix builds
+therefore use a derived Gradle SDK: one worker component is compiled from
+pinned official source to propagate only an explicitly true parent
+`java.net.preferIPv4Stack` property to those workers. Other environment
+filtering remains intact. Unknown distributions keep their official SDK and
+can still encounter this worker transport limitation.
+
+`upstreamDistribution` is the unchanged locked distribution, while
+`distribution` is the effective Nix build SDK. `distributionVariant` and
+`distributionProvenance` identify the derivative and its manifest, including
+the official ZIP, source commit/hash, patch, compiler, class and component
+hashes. A derivative is not the unchanged official artifact. `fetches` still
+lists locked upstream inputs; the derivative's fixed source input is recorded
+separately in its provenance. External network access remains denied. Capture,
 prefetch, and ordinary working-tree commands outside Nix builds keep their
 normal JVM stack selection. Linux builds keep their normal stack selection.
 The Tier 2 host isolation test uses the same setting only within its explicit

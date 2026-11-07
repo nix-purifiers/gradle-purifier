@@ -1,0 +1,28 @@
+{
+  "8.14.6": {
+    "version": "8.14.6",
+    "sourceCommit": "88c80c1459b75a6d077d24eebe7905ffa3e1293f",
+    "immutableSourceUrl": "https://raw.githubusercontent.com/gradle/gradle/88c80c1459b75a6d077d24eebe7905ffa3e1293f/platforms/core-execution/workers/src/main/java/org/gradle/workers/internal/DefaultProcessWorkerSpec.java",
+    "sourceSha256": "55f53013956313bc9197caa42bf4f979a07821e5e4c7c51e2007d175166ae892",
+    "sourceSRI": "sha256-VfUwE5VjE7yRl8qkK/T5eaB4IeXkx8UeIAfRdRZq6JI=",
+    "componentJarSha256": "5449a3d047b51e050a8d8159c5176c58caa10acb3303642e028d8dde6886ba57",
+    "originalClassSha256": "34b5cb5359c958055b68d85b413e75db1794c4d89cb6b1a67dc6357ff53abf65",
+    "originalClassMajor": 52,
+    "javacRelease": 8,
+    "distributionUrl": "https://services.gradle.org/distributions/gradle-8.14.6-bin.zip",
+    "distributionHash": "sha256-eYjtBxsqB5AOLscV/KFcarcrzm20M68wH6f6fpQHvSQ="
+  },
+  "9.9.0": {
+    "version": "9.9.0",
+    "sourceCommit": "dabfe84a6c2590fa6ecaab03ff6fefe5b838d558",
+    "immutableSourceUrl": "https://raw.githubusercontent.com/gradle/gradle/dabfe84a6c2590fa6ecaab03ff6fefe5b838d558/platforms/core-execution/workers/src/main/java/org/gradle/workers/internal/DefaultProcessWorkerSpec.java",
+    "sourceSha256": "55f53013956313bc9197caa42bf4f979a07821e5e4c7c51e2007d175166ae892",
+    "sourceSRI": "sha256-VfUwE5VjE7yRl8qkK/T5eaB4IeXkx8UeIAfRdRZq6JI=",
+    "componentJarSha256": "7c0f6cef1ee5710c85ddda50cfc4108332fe9346865b94c2dfd17f5f49b90699",
+    "originalClassSha256": "b7722bb3ee4c2e6c1051520da3092e26a3722f5ad461b3cbae819c7ed0f412d0",
+    "originalClassMajor": 61,
+    "javacRelease": 17,
+    "distributionUrl": "https://services.gradle.org/distributions/gradle-9.9.0-bin.zip",
+    "distributionHash": "sha256-CwCw/+B8TUeJwS1JNaRKcFfVV3S3VAvUo/dvM23rF3o="
+  }
+}
