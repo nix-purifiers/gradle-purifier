@@ -57,6 +57,12 @@ def main():
                                     'exitCode': result.returncode})
         save()
         if result.returncode:
+            if name == 'ordinary-test':
+                with (output / 'ordinary-test-diagnostics.log').open('w') as diagnostics:
+                    subprocess.run([sys.executable, str(root / 'tests/tier2-diagnostics.py'),
+                        '--gradle-home', step_env['GRADLE_USER_HOME'], '--project', str(cwd),
+                        '--tmpdir', str(Path(cwd).parent)], stdout=diagnostics,
+                        stderr=subprocess.STDOUT, env=step_env, check=False)
             print((output / f'{name}.log').read_text()[-16000:], file=sys.stderr)
             raise RuntimeError(f'{name} failed: {result.returncode}')
         return stdout_path.read_text().strip()
@@ -68,7 +74,7 @@ def main():
         run(f'{name}-derivation-json', ['nix', 'derivation', 'show', drv])
         result = json.loads(run(name, ['nix', 'build', '--impure', '--expr', expression,
             '--option', 'sandbox', 'true', '--option', 'max-jobs', '2', '--option', 'cores', '2',
-            '--no-link', '--json', '--print-build-logs']))
+            '--no-link', '--json', '--print-build-logs', '--keep-failed']))
         assert result[0]['drvPath'] == drv
         built = Path(result[0]['outputs']['out'])
         info = json.loads(run(f'{name}-path-info', ['nix', 'path-info', '--json', built]))
@@ -83,6 +89,7 @@ def main():
         receipt['harnessSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         receipt['evidenceFiles'] = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in (Path(__file__), root / 'tests/tier2-offline.nix',
+                         root / 'tests/tier2-diagnostics.py',
                          root / '.github/workflows/tier2-runtime.yml')}
         receipt['sample'] = json.loads((root / 'tests/real-world/petclinic.json').read_text())
         source_ref = f'git+file://{root}?rev={receipt["sourceRevision"]}'
@@ -201,7 +208,7 @@ def main():
                 'else:\n raise SystemExit("external socket unexpectedly allowed")'])
             replay_env = {'JAVA_HOME': str(java_home),
                 'JAVA_TOOL_OPTIONS': '-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9'}
-            run('ordinary-test', cut + ['./gradlew', '--no-daemon', '--info', 'clean', 'test', 'bootJar'], project, replay_env)
+            run('ordinary-test', cut + ['./gradlew', '--no-daemon', '--info', '--stacktrace', 'clean', 'test', 'bootJar'], project, replay_env)
             reports = list(project.glob('build/test-results/test/TEST-*.xml'))
             assert reports, 'the independent sample produced no test reports'
             tests = failures = skipped = 0
