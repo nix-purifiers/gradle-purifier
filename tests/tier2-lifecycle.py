@@ -224,6 +224,11 @@ def main():
                 'else:\n raise SystemExit("external socket unexpectedly allowed")'])
             replay_env = {'JAVA_HOME': str(java_home),
                 'JAVA_TOOL_OPTIONS': '-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9'}
+            # This invocation is explicitly inside the test's Seatbelt cut;
+            # ordinary host commands and capture keep their normal JVM stack.
+            if platform.system() == 'Darwin':
+                replay_env['JAVA_TOOL_OPTIONS'] += ' -Djava.net.preferIPv4Stack=true'
+            receipt['hostCutIPv4Stack'] = platform.system() == 'Darwin'
             run('ordinary-test', cut + ['./gradlew', '--no-daemon', '--info', '--stacktrace', 'clean', 'test', 'bootJar'], project, replay_env)
             reports = list(project.glob('build/test-results/test/TEST-*.xml'))
             assert reports, 'the independent sample produced no test reports'

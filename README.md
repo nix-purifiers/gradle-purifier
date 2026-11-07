@@ -215,6 +215,8 @@ including Gradle workers and tests, and makes explicit IPv6 sockets
 unavailable there. External network access remains denied. Capture,
 prefetch, and ordinary working-tree commands outside Nix builds keep their
 normal JVM stack selection. Linux builds keep their normal stack selection.
+The Tier 2 host isolation test uses the same setting only within its explicit
+Darwin Seatbelt network cut.
 
 The builder takes these arguments besides `src`, the root of the build:
 
