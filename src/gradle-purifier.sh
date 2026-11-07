@@ -662,12 +662,13 @@ run_lock() {
 # beside the lockfile, and prints its store path. The lockfile's problems
 # (stale, tampered, malformed, incomplete) fail here, as at Nix evaluation
 # of the flake.
+# An optional second argument names the GC root independently of the attribute.
 build_attr() {
   mkdir -p "$state"
-  local out
+  local out root_name=${2:-$1}
   if source_sdk_mode; then
     pure_project_snapshot
-    if ! out=$(sdk_source_command build --project "$state/pure-project" --lock "$lockfile" --attribute "$1" --root "$state/$1"); then
+    if ! out=$(sdk_source_command build --project "$state/pure-project" --lock "$lockfile" --attribute "$1" --root "$state/$root_name"); then
       die "pure Nix could not build the $1 of $lockfile; restore the declared SDK sources or relock"
     fi
     printf '%s' "$out" | tail -n 1
@@ -676,7 +677,7 @@ build_attr() {
   if ! out=$(nix-build --quiet "$lib/command.nix" \
     --argstr nixpkgs "$nixpkgs" --argstr purifierSource "$purifier_source" \
     --argstr src "$root" --argstr lockFile "$lockfile" \
-    -A "$1" --out-link "$state/$1"); then
+    -A "$1" --out-link "$state/$root_name"); then
     die "Nix could not build the $1 of $lockfile (see Nix's error above). A hash mismatch means the lockfile does not match what a URL serves: restore the lockfile from version control, or run 'gradle-purifier lock --relock' if the remote changed the file."
   fi
   printf '%s' "$out" | tail -n 1
@@ -711,7 +712,7 @@ prefetch_command() {
   local tree jdk distribution
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
-  distribution=$(build_attr upstreamDistribution)
+  distribution=$(build_attr upstreamDistribution distribution)
   realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
@@ -828,7 +829,7 @@ publish_command() {
   publication=$(build_attr publication)
   tree=$(build_attr repository)
   jdk=$(build_attr jdk)
-  distribution=$(build_attr upstreamDistribution)
+  distribution=$(build_attr upstreamDistribution distribution)
   realise_sdk_context
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
