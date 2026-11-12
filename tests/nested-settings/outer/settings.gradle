@@ -1,0 +1,4 @@
+pluginManagement { includeBuild '../inner' }
+plugins { id 'fixture.inner-settings' }
+assert extensions.extraProperties.get('innerApplied')
+rootProject.name = 'outer'

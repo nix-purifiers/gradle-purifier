@@ -1,0 +1,9 @@
+plugins { id 'java-gradle-plugin' }
+gradlePlugin {
+    plugins {
+        outerSettings {
+            id = 'fixture.outer-settings'
+            implementationClass = 'fixture.OuterSettingsPlugin'
+        }
+    }
+}

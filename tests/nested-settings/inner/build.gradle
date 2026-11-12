@@ -1,0 +1,9 @@
+plugins { id 'java-gradle-plugin' }
+gradlePlugin {
+    plugins {
+        innerSettings {
+            id = 'fixture.inner-settings'
+            implementationClass = 'fixture.InnerSettingsPlugin'
+        }
+    }
+}
