@@ -732,49 +732,56 @@ if (rootBuild && mode == 'publish') {
         publication.version = module.version
         def immutableDirectory = new File(repositoryPath,
             "${module.group.replace('.', '/')}/${module.name}/${module.version}".toString())
-        // Native signing writes detached signatures beside its inputs. Give
-        // it writable copies of the exact Nix projection, including its POM,
-        // rather than asking it to write into the immutable repository.
-        def stagingKey = java.security.MessageDigest.getInstance('SHA-256').digest(
-            "${project.path}:${publication.name}:${module.group}:${module.name}:${module.version}".getBytes('UTF-8')).encodeHex().toString()
-        def directory = new File(project.rootDir, ".gradle-purifier/publication-staging/${stagingKey}".toString())
-        if (!directory.mkdirs() && !directory.isDirectory()) {
-            throw new GradleException('gradle-purifier: could not create writable publication staging directory')
-        }
-        immutableDirectory.eachFile { file ->
-            if (file.isFile() && !(file.name ==~ /.*\.(md5|sha1|sha256|sha512|asc)$/)) {
-                java.nio.file.Files.copy(file.toPath(), new File(directory, file.name).toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-            }
-        }
         def prefix = "${module.name}-${module.version}".toString()
-        def files = originals == null ? directory.listFiles().findAll { file ->
+        def pomFile = new File(immutableDirectory, prefix + '.pom')
+        if (!pomFile.isFile()) {
+            throw new GradleException("gradle-purifier: the Nix projection has no ${pomFile.name}")
+        }
+        // Only the immutable projection determines what may be published.
+        // A previous run's writable copies cannot supply missing artifacts or
+        // add optional metadata to the current projection.
+        def files = originals == null ? immutableDirectory.listFiles().findAll { file ->
             file.isFile() && file.name.startsWith(prefix) &&
                 !(file.name == prefix + '.pom') &&
                 !(file.name ==~ /.*\.(md5|sha1|sha256|sha512|asc)$/)
         }.collect { file ->
             def suffix = file.name.substring(prefix.length())
             def parts = suffix.startsWith('.') ? [null, suffix.substring(1)] : suffix.substring(1).split(/\./, 2)
-            [file: file, classifier: parts[0], extension: parts[1]]
+            [source: file, classifier: parts[0], extension: parts[1]]
         } : originals.collect { artifact ->
             def classifier = artifact.classifier ?: null
             def suffix = (classifier ? '-' + classifier : '') + '.' + artifact.extension
-            def file = new File(directory, prefix + suffix)
+            def file = new File(immutableDirectory, prefix + suffix)
             if (!file.isFile()) {
                 throw new GradleException("gradle-purifier: the Nix projection has no ${file.name}")
             }
-            [file: file, classifier: classifier, extension: artifact.extension]
+            [source: file, classifier: classifier, extension: artifact.extension]
+        }
+        def moduleFile = new File(immutableDirectory, prefix + '.module')
+        // Native signing writes detached signatures beside its inputs. Give
+        // it writable copies of the exact Nix projection, including its POM,
+        // rather than asking it to write into the immutable repository.
+        def stagingKey = java.security.MessageDigest.getInstance('SHA-256').digest(
+            "${project.path}:${publication.name}:${module.group}:${module.name}:${module.version}".getBytes('UTF-8')).encodeHex().toString()
+        def stagingRoot = new File(project.rootDir, '.gradle-purifier/publication-staging')
+        if (!stagingRoot.mkdirs() && !stagingRoot.isDirectory()) {
+            throw new GradleException('gradle-purifier: could not create writable publication staging directory')
+        }
+        def directory = java.nio.file.Files.createTempDirectory(stagingRoot.toPath(), stagingKey + '-').toFile()
+        def copies = files.collect { it.source } + [pomFile]
+        if (originals != null && moduleFile.isFile()) copies.add(moduleFile)
+        copies.unique().each { file ->
+            java.nio.file.Files.copy(file.toPath(), new File(directory, file.name).toPath())
         }
         publication.artifacts = []
         files.each { replacement ->
-            publication.artifact(replacement.file) { artifact ->
+            publication.artifact(new File(directory, replacement.source.name)) { artifact ->
                 artifact.classifier = replacement.classifier
                 artifact.extension = replacement.extension
             }
         }
-        def moduleFile = new File(directory, prefix + '.module')
         if (originals != null && moduleFile.isFile()) {
-            publication.artifact(moduleFile) { artifact -> artifact.extension = 'module' }
+            publication.artifact(new File(directory, moduleFile.name)) { artifact -> artifact.extension = 'module' }
         }
         project.tasks.withType(GenerateMavenPom).matching {
             it.name == "generatePomFileFor${publication.name.capitalize()}Publication".toString()

@@ -81,7 +81,16 @@ def main():
         # A poisoned compiler verifies that CLI publication reuses the Nix
         # artifacts rather than silently rebuilding in the native working tree.
         init = work / 'reject-compile.init.gradle'
-        init.write_text("gradle.beforeProject { p -> p.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach { t -> t.doFirst { throw new GradleException('unexpected native compilation') } } }\n")
+        init.write_text("""gradle.beforeProject { p ->
+    p.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach { t ->
+        t.doFirst { throw new GradleException('unexpected native compilation') }
+    }
+}
+gradle.projectsEvaluated { g ->
+    def destination = System.getenv('TEST_PUBLICATION_REPOSITORY')
+    if (destination) g.rootProject.publishing.repositories.getByName('release').url = new File(destination)
+}
+""")
         run('signed-publication', [args.cli, 'publish', '--no-daemon', '--init-script', init,
             'publishAllPublicationsToReleaseRepository'], extra={'TEST_SIGNING_KEY_FILE': str(key)})
         publication = source / '.gradle-purifier/publication'
@@ -108,7 +117,108 @@ def main():
         assert prefix + '.jar' in verified
         assert prefix + '-sources.jar' in verified
         assert prefix + '-javadoc.jar' in verified
-        report.update(status='passed', release=str(release), signedArtifacts=verified)
+
+        # Exercise native publish mode against a deliberately incomplete
+        # projection. CLI publish would rebuild/restore the projection first,
+        # hiding the stale-stage counterexample this regression must cover.
+        shadow = work / 'projection'
+        shutil.copytree(publication / 'repository', shadow, symlinks=False)
+        shadow.chmod(0o755)
+        for path in shadow.rglob('*'):
+            path.chmod(0o755 if path.is_dir() else 0o644)
+        catalog = work / 'catalog.json'
+        catalog.write_bytes((publication / 'catalog.json').read_bytes())
+        built = {path.name: str(path.resolve()) for path in release.iterdir() if path.exists()}
+        tree = source / '.gradle-purifier/repository'
+        java = source / '.gradle-purifier/jdk'
+        if (java / 'lib/openjdk/bin/java').is_file():
+            java = java / 'lib/openjdk'
+        native = [gradle, '--no-daemon', '--offline', '--no-build-cache', '--no-configuration-cache',
+                  '--max-workers=2', '--init-script', root / 'nix/lib/purifier.init.gradle',
+                  '--init-script', root / 'nix/lib/task-jdks.init.gradle', '--init-script', init,
+                  '-Dorg.gradle.internal.plugins.portal.url.override=' + tree.as_uri() + '/https/plugins.gradle.org/m2',
+                  '-x', 'generateMetadataFileForLibraryPublication', 'publishAllPublicationsToReleaseRepository']
+        native_env = {'JAVA_HOME': str(java), 'TEST_SIGNING_KEY_FILE': str(key),
+                      'GRADLE_PURIFIER_MODE': 'publish', 'GRADLE_PURIFIER_BUILD_ROOT': str(source),
+                      'GRADLE_PURIFIER_REPOSITORY': tree.as_uri(),
+                      'GRADLE_PURIFIER_ARTIFACTS': json.dumps(built),
+                      'GRADLE_PURIFIER_PUBLICATION_REPOSITORY': str(shadow),
+                      'GRADLE_PURIFIER_PUBLICATION_CATALOG': str(catalog)}
+        staging = source / '.gradle-purifier/publication-staging'
+
+        def stage_key(publication_name, artifact_name):
+            return hashlib.sha256(':'.join([':', publication_name, module['group'], artifact_name,
+                                           version]).encode()).hexdigest()
+
+        # Seed the exact old deterministic staging location and every genuine
+        # prior stage. Neither may stand in for an absent immutable main JAR.
+        old_stage = staging / stage_key('library', module['name'])
+        old_stage.mkdir(exist_ok=True)
+        for directory in staging.iterdir():
+            if directory.is_dir():
+                stale = directory / (prefix + '.jar')
+                stale.unlink(missing_ok=True)
+                stale.write_bytes(b'stale main jar must never be published')
+        (shadow / relative / (prefix + '.jar')).unlink()
+        negative_destination = work / 'missing-main-deployment'
+        run('missing-projection-rejects-stale-main', native, expected=False,
+            extra=native_env | {'TEST_PUBLICATION_REPOSITORY': str(negative_destination)},
+            contains='the Nix projection has no ' + prefix + '.jar')
+        assert not any(negative_destination.rglob('*.jar')), 'missing immutable JAR was deployed'
+
+        # Restore required bytes, remove the optional module, and inject it
+        # into old staging. Native signing/publication must use a fresh stage
+        # and must not invent optional metadata from old writable files.
+        shutil.copyfile(publication / 'repository' / relative / (prefix + '.jar'),
+                        shadow / relative / (prefix + '.jar'))
+        (shadow / relative / (prefix + '.module')).unlink()
+        for directory in staging.iterdir():
+            if directory.is_dir():
+                stale = directory / (prefix + '.module')
+                stale.unlink(missing_ok=True)
+                stale.write_text('stale optional module')
+        before_stages = {path.name for path in staging.iterdir()}
+        without_module = work / 'without-module-deployment'
+        run('stale-optional-module-not-published', native,
+            extra=native_env | {'TEST_PUBLICATION_REPOSITORY': str(without_module)})
+        deployed_without_module = without_module / relative
+        assert not list(deployed_without_module.glob('*.module*')), 'stale optional module was deployed'
+        assert {path.name for path in staging.iterdir()} > before_stages, 'publication reused a prior stage'
+        for name in [prefix + '.jar', prefix + '-sources.jar', prefix + '-javadoc.jar', prefix + '.pom']:
+            assert (deployed_without_module / name).read_bytes() == (shadow / relative / name).read_bytes(), name
+            run('verify-fresh-stage-' + name.rsplit('.', 1)[-1] + '-' + str(len(report['commands'])),
+                [gpg, '--batch', '--verify', deployed_without_module / (name + '.asc'), deployed_without_module / name])
+
+        # Provided input publications enumerate artifacts rather than using
+        # the native publication's required artifact list. That enumeration
+        # must also come exclusively from the immutable projection.
+        extra = dict(module, name='provided-input')
+        extra_relative = Path(module['group'].replace('.', '/')) / extra['name'] / version
+        extra_directory = shadow / extra_relative
+        extra_directory.mkdir(parents=True)
+        extra_prefix = extra['name'] + '-' + version
+        shutil.copyfile(shadow / relative / (prefix + '.jar'), extra_directory / (extra_prefix + '.jar'))
+        (extra_directory / (extra_prefix + '.pom')).write_text(
+            (shadow / relative / (prefix + '.pom')).read_text().replace(module['name'], extra['name']))
+        extended = json.loads(catalog.read_text())
+        extended['publications'] = extended.get('publications', extended['modules']) + [extra]
+        extended['modules'] = extended['modules'] + [extra]
+        catalog.write_text(json.dumps(extended))
+        extra_stage = staging / stage_key('purifierNixInput0', extra['name'])
+        extra_stage.mkdir(exist_ok=True)
+        (extra_stage / (extra_prefix + '-injected.jar')).write_bytes(b'not in immutable input projection')
+        (extra_stage / (extra_prefix + '.module')).write_text('not in immutable input projection')
+        closure_destination = work / 'closure-deployment'
+        run('provided-input-ignores-injected-stage', native,
+            extra=native_env | {'TEST_PUBLICATION_REPOSITORY': str(closure_destination)})
+        deployed_extra = closure_destination / extra_relative
+        assert (deployed_extra / (extra_prefix + '.jar')).read_bytes() == (extra_directory / (extra_prefix + '.jar')).read_bytes()
+        assert (deployed_extra / (extra_prefix + '.pom')).read_bytes() == (extra_directory / (extra_prefix + '.pom')).read_bytes()
+        assert not list(deployed_extra.glob('*-injected.jar*')), 'injected input classifier was deployed'
+        assert not list(deployed_extra.glob('*.module*')), 'injected input module was deployed'
+        report.update(status='passed', release=str(release), signedArtifacts=verified,
+                      missingProjectionRejected=True, freshStageVerified=True,
+                      immutableOptionalMetadata=True, immutableInputEnumeration=True)
     except Exception as error:
         report.update(status='failed', error=str(error))
         raise
