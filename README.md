@@ -97,6 +97,12 @@ These are the commands:
 - `gradle-purifier publish` uploads the `release` that Nix built (see
   below).
 
+Capture and Nix builds skip the Gradle Signing plugin's `Sign` tasks, so
+they need no private release key and their outputs contain no detached
+signatures. Interactive Gradle commands keep the build's signing policy.
+`gradle-purifier publish` signs the Nix-built artifacts using the signing
+configuration and credentials of the native build at deployment time.
+
 For a build kept external, each command takes `--lockfile <path>`, or the
 environment variable `GRADLE_PURIFIER_LOCKFILE`. The dev shell of the
 flake that passes `lockFile` to the builder can set the variable to the

@@ -61,6 +61,14 @@ The tests come in two layers.
 The lockfiles of the fixtures are test data. `tests/relock-fixtures.sh`
 renews them; it needs the network.
 
+`tests/signing-native.py` captures and builds a Maven publication with the
+Signing plugin without a private key. Both interactive publication and CLI
+publication must still reject the absent key. The test then generates an
+ephemeral key, publishes through the CLI with native compilation poisoned,
+compares the deployed files with the Nix release and verifies every detached
+signature using GnuPG. CI runs this on both Linux architectures and retains
+logs and the report. The key stays outside the fixture's source tree.
+
 `runtime-metadata-unit` checks the runtime exporter with the pinned shared
 JVM repository tool, including queried BOM sidecars, coordinate/path
 rejections, duplicate metadata and provided-input authority. The composition

@@ -558,6 +558,18 @@ allprojects { project ->
         }
     }
 
+    // Signing belongs to deployment: a capture or a Nix build must not need
+    // the producer's private release key or retain nondeterministic signatures.
+    // Gradle's derived signature artifacts follow the skipped Sign task.
+    // Leave interactive and publish invocations under the build's own policy.
+    if (mode in ['lock', 'sandbox']) {
+        project.pluginManager.withPlugin('signing') {
+            project.tasks.withType(org.gradle.plugins.signing.Sign).configureEach { task ->
+                task.enabled = false
+            }
+        }
+    }
+
     if (!rootBuild || mode == 'interactive' || mode == 'publish') {
         return
     }
@@ -718,8 +730,23 @@ if (rootBuild && mode == 'publish') {
         publication.groupId = module.group
         publication.artifactId = module.name
         publication.version = module.version
-        def directory = new File(repositoryPath,
+        def immutableDirectory = new File(repositoryPath,
             "${module.group.replace('.', '/')}/${module.name}/${module.version}".toString())
+        // Native signing writes detached signatures beside its inputs. Give
+        // it writable copies of the exact Nix projection, including its POM,
+        // rather than asking it to write into the immutable repository.
+        def stagingKey = java.security.MessageDigest.getInstance('SHA-256').digest(
+            "${project.path}:${publication.name}:${module.group}:${module.name}:${module.version}".getBytes('UTF-8')).encodeHex().toString()
+        def directory = new File(project.rootDir, ".gradle-purifier/publication-staging/${stagingKey}".toString())
+        if (!directory.mkdirs() && !directory.isDirectory()) {
+            throw new GradleException('gradle-purifier: could not create writable publication staging directory')
+        }
+        immutableDirectory.eachFile { file ->
+            if (file.isFile() && !(file.name ==~ /.*\.(md5|sha1|sha256|sha512|asc)$/)) {
+                java.nio.file.Files.copy(file.toPath(), new File(directory, file.name).toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
         def prefix = "${module.name}-${module.version}".toString()
         def files = originals == null ? directory.listFiles().findAll { file ->
             file.isFile() && file.name.startsWith(prefix) &&
@@ -753,7 +780,15 @@ if (rootBuild && mode == 'publish') {
             it.name == "generatePomFileFor${publication.name.capitalize()}Publication".toString()
         }.configureEach { task ->
             task.destination = new File(directory, prefix + '.pom')
-            task.enabled = false
+            // Keep the native producer task enabled: Maven signing suppresses
+            // publication of its POM signature when that task is disabled.
+            // Its only action copies the projected POM; it never regenerates it.
+            task.setActions([])
+            task.doLast {
+                java.nio.file.Files.copy(new File(immutableDirectory, prefix + '.pom').toPath(),
+                    task.destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+            task.enabled = true
         }
         project.tasks.withType(GenerateModuleMetadata).matching {
             it.name == "generateMetadataFileFor${publication.name.capitalize()}Publication".toString()

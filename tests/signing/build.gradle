@@ -1,0 +1,33 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+}
+
+group = 'example'
+version = '1.0'
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        library(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = 'release'
+            url = layout.buildDirectory.dir('release-repository')
+        }
+    }
+}
+
+signing {
+    def keyFile = System.getenv('TEST_SIGNING_KEY_FILE')
+    if (keyFile) useInMemoryPgpKeys(new File(keyFile).text, '')
+    sign publishing.publications.library
+}

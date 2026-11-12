@@ -126,6 +126,36 @@ jobs:
           nix build '.#default' --out-link "$RUNNER_TEMP/snapshot-groovy-cli"
           python3 tests/snapshot-groovy-native.py "$RUNNER_TEMP/snapshot-groovy-cli/bin/gradle-purifier"
 
+  signing-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build the command and signature verifier
+        run: |
+          nix build '.#default' --out-link "$RUNNER_TEMP/signing-cli"
+          nix build --inputs-from . 'nixpkgs#gnupg' --out-link "$RUNNER_TEMP/signing-gpg"
+      - name: Unsigned Nix build and signed native deployment
+        run: |
+          python3 -B tests/signing-native.py \
+            --cli "$RUNNER_TEMP/signing-cli/bin/gradle-purifier" \
+            --gpg "$RUNNER_TEMP/signing-gpg/bin/gpg" \
+            --results "$RUNNER_TEMP/signing-native"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signing-native-${{ matrix.runner }}
+          path: |
+            ${{ runner.temp }}/signing-native/report.json
+            ${{ runner.temp }}/signing-native/*.log
+
   project-sdk-closure:
     runs-on: ubuntu-latest
     timeout-minutes: 30
