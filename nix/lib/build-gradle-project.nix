@@ -86,6 +86,16 @@
   srcFilter ? null,
 }:
 let
+  # Set these before the builder shell starts as well as for its children.
+  # Exporting a new locale archive inside Bash is too late for its own
+  # setlocale calls, even though forked Java tools see the new environment.
+  localeEnvironment = {
+    LANG = "en_US.UTF-8";
+    LC_ALL = "en_US.UTF-8";
+  }
+  // lib.optionalAttrs stdenvNoCC.hostPlatform.isLinux {
+    LOCALE_ARCHIVE = "${glibcLocales}/lib/locale/locale-archive";
+  };
   # The packages that the fetchEntry and tree of the library take by name.
   fetcherArgs = {
     inherit
@@ -393,11 +403,6 @@ let
       export GRADLE_PURIFIER_JDK_CONTEXT=${sdkContext}
     ''}
     export JAVA_HOME=${lib.escapeShellArg managerSdkHome}
-    ${lib.optionalString stdenvNoCC.hostPlatform.isLinux ''
-      export LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive
-    ''}
-    export LANG=en_US.UTF-8
-    export LC_ALL=en_US.UTF-8
     mkdir -p "$HOME" "$GRADLE_USER_HOME"
     ${lib.optionalString hasKonan konanSetup}
     GRADLE_PURIFIER_MODE="" ${python3}/bin/python ${./gradle-flags.py} sandbox "$TMPDIR/gradle-help.txt" \
@@ -479,6 +484,7 @@ let
     in
     stdenvNoCC.mkDerivation (finalAttrs: {
       name = project.id;
+      env = localeEnvironment;
       # Gradle's file-lock listener needs loopback UDP even offline.
       ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
       src = filteredSrc;
@@ -621,6 +627,7 @@ let
   # The `check` task of every project of the build, in the sandbox.
   tests = stdenvNoCC.mkDerivation {
     name = "${gradle.rootProjectName}-tests";
+    env = localeEnvironment;
     ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
     src = filteredSrc;
     dontConfigure = true;
