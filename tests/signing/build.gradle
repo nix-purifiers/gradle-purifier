@@ -31,3 +31,8 @@ signing {
     if (keyFile) useInMemoryPgpKeys(new File(keyFile).text, '')
     sign publishing.publications.library
 }
+
+// Convention plugins such as JUnit's configure this after applying signing.
+tasks.withType(org.gradle.plugins.signing.Sign).configureEach {
+    enabled = true
+}

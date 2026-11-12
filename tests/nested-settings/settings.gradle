@@ -1,0 +1,4 @@
+pluginManagement { includeBuild 'outer' }
+plugins { id 'fixture.outer-settings' }
+assert extensions.extraProperties.get('outerApplied')
+rootProject.name = 'nested-settings'

@@ -156,6 +156,33 @@ jobs:
             ${{ runner.temp }}/signing-native/report.json
             ${{ runner.temp }}/signing-native/*.log
 
+  nested-settings-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build the command
+        run: nix build '.#default' --out-link "$RUNNER_TEMP/nested-settings-cli"
+      - name: Nested settings plugin capture and replay
+        run: |
+          python3 -B tests/nested-settings-native.py \
+            --cli "$RUNNER_TEMP/nested-settings-cli/bin/gradle-purifier" \
+            --results "$RUNNER_TEMP/nested-settings"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nested-settings-${{ matrix.runner }}
+          path: |
+            ${{ runner.temp }}/nested-settings/report.json
+            ${{ runner.temp }}/nested-settings/*.log
+
   project-sdk-closure:
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -104,6 +104,16 @@ def konanProperties = setting('GRADLE_PURIFIER_KONAN_PROPERTIES')
 def konanDataDir = setting('GRADLE_PURIFIER_KONAN_DATA_DIR')
 def runCheck = System.getenv('GRADLE_PURIFIER_CHECK') == '1'
 def rootBuild = gradle.parent == null
+// Convention plugins may explicitly re-enable Sign tasks after their plugin
+// is applied. Wait until the native graph is ready, after lazy configuration,
+// to defer signing to deployment. Interactive and publish policies stay native.
+if (mode in ['lock', 'sandbox']) {
+    gradle.taskGraph.whenReady { graph ->
+        graph.allTasks.findAll { it instanceof org.gradle.plugins.signing.Sign }.each { task ->
+            task.enabled = false
+        }
+    }
+}
 def purifierScriptDirectory = buildscript.sourceFile.parentFile
 // A reserved native metadata publication is an implementation input, not a
 // second user publication. Ownership is by exact object, including callbacks
@@ -254,8 +264,13 @@ if (mode != 'publish') {
     gradle.projectsEvaluated { g ->
         def outermost = g
         while (outermost.parent != null) outermost = outermost.parent
+        // An included settings-plugin build can finish evaluation before
+        // the outer build has even created its root project. The CLI and
+        // interactive adapter already know the selected build's directory.
+        def selectedRoot = setting('GRADLE_PURIFIER_BUILD_ROOT') ?: setting('GRADLE_PURIFIER_SDK_ROOT')
+        def contextRoot = selectedRoot ? new File(selectedRoot) : outermost.rootProject.projectDir
         g.rootProject.allprojects.each { project ->
-            def context = outermost.rootProject.projectDir.toPath().relativize(project.rootDir.toPath()).toString().replace('\\', '/') ?: '.'
+            def context = contextRoot.toPath().relativize(project.rootDir.toPath()).toString().replace('\\', '/') ?: '.'
             project.tasks.withType(org.gradle.api.tasks.javadoc.Javadoc).toList().each { javadoc ->
                 if (!(javadoc.options instanceof org.gradle.external.javadoc.StandardJavadocDocletOptions)) return
                 def remoteLinks = { javadoc.options.links.findAll { URI.create(it).scheme?.toLowerCase(Locale.ROOT) in ['http', 'https'] }.toList() }
@@ -554,18 +569,6 @@ allprojects { project ->
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Signing belongs to deployment: a capture or a Nix build must not need
-    // the producer's private release key or retain nondeterministic signatures.
-    // Gradle's derived signature artifacts follow the skipped Sign task.
-    // Leave interactive and publish invocations under the build's own policy.
-    if (mode in ['lock', 'sandbox']) {
-        project.pluginManager.withPlugin('signing') {
-            project.tasks.withType(org.gradle.plugins.signing.Sign).configureEach { task ->
-                task.enabled = false
             }
         }
     }
