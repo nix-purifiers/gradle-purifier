@@ -15,8 +15,11 @@ def main():
     parser.add_argument('--cli', type=Path, required=True)
     parser.add_argument('--gpg', type=Path, required=True)
     parser.add_argument('--results', type=Path, required=True)
+    parser.add_argument('--publication-init', type=Path,
+                        help='Native publication init script to exercise (for the old-head negative control)')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
+    publication_init = args.publication_init or root / 'nix/lib/purifier.init.gradle'
     work = args.results.resolve()
     work.mkdir(parents=True, exist_ok=False)
     source = work / 'project'
@@ -31,7 +34,9 @@ def main():
                GRADLE_USER_HOME=str(work / 'gradle-home'), GNUPGHOME=str(work / 'gnupg'))
     env.pop('TEST_SIGNING_KEY_FILE', None)
     report = {'schema': 1, 'status': 'running', 'commands': [],
-              'cli': str(args.cli), 'source': str(root)}
+              'cli': str(args.cli), 'source': str(root),
+              'publicationInit': str(publication_init),
+              'publicationInitSha256': hashlib.sha256(publication_init.read_bytes()).hexdigest()}
 
     def save():
         (work / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -134,7 +139,7 @@ gradle.projectsEvaluated { g ->
         if (java / 'lib/openjdk/bin/java').is_file():
             java = java / 'lib/openjdk'
         native = [gradle, '--no-daemon', '--offline', '--no-build-cache', '--no-configuration-cache',
-                  '--max-workers=2', '--init-script', root / 'nix/lib/purifier.init.gradle',
+                  '--max-workers=2', '--init-script', publication_init,
                   '--init-script', root / 'nix/lib/task-jdks.init.gradle', '--init-script', init,
                   '-Dorg.gradle.internal.plugins.portal.url.override=' + tree.as_uri() + '/https/plugins.gradle.org/m2',
                   '-x', 'generateMetadataFileForLibraryPublication', 'publishAllPublicationsToReleaseRepository']
