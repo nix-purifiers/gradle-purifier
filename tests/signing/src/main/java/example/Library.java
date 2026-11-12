@@ -1,6 +1,6 @@
 package example;
 
-/** A library whose release publication requires a signing key. */
+/** A library with UTF-8 documentation (café) whose release needs a signing key. */
 public final class Library {
     private Library() {}
 

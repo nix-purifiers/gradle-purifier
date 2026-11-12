@@ -68,6 +68,8 @@ ephemeral key, publishes through the CLI with native compilation poisoned,
 compares the deployed files with the Nix release and verifies every detached
 signature using GnuPG. CI runs this on both Linux architectures and retains
 logs and the report. The key stays outside the fixture's source tree.
+The fixture includes UTF-8 Javadoc text, so its Java 17 sandboxed release
+also checks that forked documentation tools inherit a UTF-8 locale.
 
 `runtime-metadata-unit` checks the runtime exporter with the pinned shared
 JVM repository tool, including queried BOM sidecars, coordinate/path

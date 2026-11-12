@@ -50,6 +50,9 @@
   # The JDKs a build can run on; the default JDK of a build is the headless
   # one of the Java major version its lock was made with.
   javaPackages,
+  # Forked Javadoc/compiler processes on Java 17 and earlier use the
+  # process locale for their default source encoding.
+  glibcLocales,
   # The nix-purifiers library, which fetches the locked downloads and lays
   # them out; the overlay passes the one that the flake pins.
   purifier,
@@ -390,6 +393,11 @@ let
       export GRADLE_PURIFIER_JDK_CONTEXT=${sdkContext}
     ''}
     export JAVA_HOME=${lib.escapeShellArg managerSdkHome}
+    ${lib.optionalString stdenvNoCC.hostPlatform.isLinux ''
+      export LOCALE_ARCHIVE=${glibcLocales}/lib/locale/locale-archive
+    ''}
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
     mkdir -p "$HOME" "$GRADLE_USER_HOME"
     ${lib.optionalString hasKonan konanSetup}
     GRADLE_PURIFIER_MODE="" ${python3}/bin/python ${./gradle-flags.py} sandbox "$TMPDIR/gradle-help.txt" \
