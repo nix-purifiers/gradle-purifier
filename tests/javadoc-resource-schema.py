@@ -19,7 +19,7 @@ def main():
     original=json.loads((project/'gradle-purifier.lock.json').read_text())
     expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "JAVADOC_SOURCE");
       p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[];};
-      read=import (/. + builtins.getEnv "JAVADOC_SOURCE" + "/nix/lib/read-lock.nix") {lib=p.lib;};
+      read=import (/. + builtins.getEnv "JAVADOC_SOURCE" + "/lib-overlays/default/read-lock.nix") {lib=p.lib;};
       in (read {src=/. + builtins.getEnv "JAVADOC_PROJECT";lockFile=/. + builtins.getEnv "JAVADOC_LOCK";}).problems'''
     env=dict(os.environ,JAVADOC_SOURCE=str(root),JAVADOC_PROJECT=str(project))
     def read(file):

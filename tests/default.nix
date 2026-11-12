@@ -132,18 +132,18 @@ in
   sdk-source-capture-unit =
     runCommand "sdk-source-capture-unit" { nativeBuildInputs = [ pkgs.python3 ]; }
       ''
-        mkdir -p tests/sdk-sources nix/lib
+        mkdir -p tests/sdk-sources pkgs/build-gradle-project
         cp ${./sdk-sources/test_capture.py} tests/sdk-sources/test_capture.py
-        cp ${../nix/lib/capture-project-jdks.py} nix/lib/capture-project-jdks.py
+        cp ${../pkgs/build-gradle-project/capture-project-jdks.py} pkgs/build-gradle-project/capture-project-jdks.py
         PYTHONDONTWRITEBYTECODE=1 python3 -B tests/sdk-sources/test_capture.py
         touch $out
       '';
   runtime-metadata-unit =
     runCommand "runtime-metadata-unit" { nativeBuildInputs = [ pkgs.python3 ]; }
       ''
-        mkdir -p tests nix/lib
+        mkdir -p tests pkgs/build-gradle-project
         cp ${./test_export_runtime.py} tests/test_export_runtime.py
-        cp ${../nix/lib/export-runtime.py} nix/lib/export-runtime.py
+        cp ${../pkgs/build-gradle-project/export-runtime.py} pkgs/build-gradle-project/export-runtime.py
         PYTHONDONTWRITEBYTECODE=1 python3 tests/test_export_runtime.py ${purifier.jvmRepositoryTool}
         touch $out
       '';
@@ -157,9 +157,9 @@ in
         "nix-support/artifacts/maven/snapshot-groovy-sources.jar"
       ];
   publication-unit = runCommand "publication-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-    mkdir -p tests nix/lib
+    mkdir -p tests pkgs/build-gradle-project
     cp ${./test_normalize_publications.py} tests/test_normalize_publications.py
-    cp ${../nix/lib/normalize-publications.py} nix/lib/normalize-publications.py
+    cp ${../pkgs/build-gradle-project/normalize-publications.py} pkgs/build-gradle-project/normalize-publications.py
     python3 tests/test_normalize_publications.py
     touch $out
   '';
@@ -348,10 +348,10 @@ in
       '';
 
   gradle-flags-unit = runCommand "gradle-flags-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-    mkdir -p tests/gradle-flags-help nix/lib
+    mkdir -p tests/gradle-flags-help pkgs/build-gradle-project
     cp ${./test_gradle_flags.py} tests/test_gradle_flags.py
     cp -r ${./gradle-flags-help}/. tests/gradle-flags-help/
-    cp ${../nix/lib/gradle-flags.py} nix/lib/gradle-flags.py
+    cp ${../pkgs/build-gradle-project/gradle-flags.py} pkgs/build-gradle-project/gradle-flags.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_gradle_flags.py
     touch $out
   '';

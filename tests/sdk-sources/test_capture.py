@@ -5,7 +5,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-spec = importlib.util.spec_from_file_location('sdk_capture', Path(__file__).resolve().parents[2]/'nix/lib/capture-project-jdks.py')
+spec = importlib.util.spec_from_file_location('sdk_capture', Path(__file__).resolve().parents[2]/'pkgs/build-gradle-project/capture-project-jdks.py')
 capture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(capture)
 HOME = '/nix/store/'+'0'*32+'-sdk/home'

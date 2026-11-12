@@ -40,7 +40,7 @@ def main():
     if system != 'x86_64-linux':
         raise ValueError('project SDK source commands currently require x86_64-linux')
     data = dict(mode=args.mode, system=system, helper=tree(args.helper),
-                library=tree(Path(__file__).resolve().parent), nixpkgs=tree(args.nixpkgs))
+                library=tree(Path(__file__).resolve().parents[2]), nixpkgs=tree(args.nixpkgs))
     if args.mode == 'preflight':
         sys.path.insert(0, str(args.helper / 'tools'))
         import jvm_sdk_sources
@@ -83,7 +83,7 @@ def main():
                       'args = builtins.fromJSON (builtins.unsafeDiscardStringContext ' +
                       '(builtins.readFile (command.outPath + "/arguments.json"))); ' +
                       'library = builtins.fetchTree args.library; ' +
-                      'in (import (library.outPath + "/project-sdk-command.nix")) args')
+                      'in (import (library.outPath + "/pkgs/build-gradle-project/project-sdk-command.nix")) args')
         argv = ['nix', 'build', '--expr', expression, '--json', '--option', 'pure-eval', 'true',
                 '--option', 'allow-import-from-derivation', 'false', '--no-use-registries']
         argv += ['--out-link', str(args.root)] if args.root else ['--no-link']

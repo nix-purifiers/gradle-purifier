@@ -110,7 +110,9 @@ let
 
   # The lock in memory (read-lock.nix). checkLock fails evaluation with
   # its problems: a stale, tampered, malformed or incomplete lockfile.
-  lock = purifier.checkLock (import ./read-lock.nix { inherit lib; } { inherit src lockFile; });
+  lock = purifier.checkLock (
+    import ../../lib-overlays/default/read-lock.nix { inherit lib; } { inherit src lockFile; }
+  );
   inherit (lock) gradle;
   # The downloads this system needs.
   entries = purifier.entriesFor stdenv.hostPlatform.system lock;

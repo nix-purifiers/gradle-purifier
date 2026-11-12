@@ -159,7 +159,7 @@ tree_path() {
 }
 
 # The hash of the build definition at the build root with the gradle
-# arguments of the JSON list $1, as nix/lib/inputs.nix computes it; the
+# arguments of the JSON list $1, as lib-overlays/default/inputs.nix computes it; the
 # builder computes it the same way.
 # Source mode has a separate pure command path. The original entry points
 # retain their argument and identity meanings for undeclared projects.
@@ -193,7 +193,7 @@ inputs_hash() {
     return
   fi
   nix-instantiate --eval --strict --json \
-    --expr "{ src, args }: import $lib/inputs.nix { lib = (import $nixpkgs { }).lib; src = /. + src; gradleArguments = builtins.fromJSON args; }" \
+    --expr "{ src, args }: import $lib/../../lib-overlays/default/inputs.nix { lib = (import $nixpkgs { }).lib; src = /. + src; gradleArguments = builtins.fromJSON args; }" \
     --argstr src "$root" --argstr args "$1" | jq -r .
 }
 
@@ -657,7 +657,7 @@ run_lock() {
   echo "gradle-purifier: wrote $lockfile ($(jq '.artifacts | length' "$lockfile") downloads)" >&2
 }
 
-# Builds the attribute $1 of the build (nix/lib/command.nix, which applies
+# Builds the attribute $1 of the build (pkgs/build-gradle-project/command.nix, which applies
 # buildGradleProject to the build root and the lockfile), with a GC root
 # beside the lockfile, and prints its store path. The lockfile's problems
 # (stale, tampered, malformed, incomplete) fail here, as at Nix evaluation
