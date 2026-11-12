@@ -33,7 +33,7 @@ pkgs.runCommand "petclinic-ordinary-offline"
     mkdir -p "$HOME" "$GRADLE_USER_HOME/init.d" project
     cp -R ${src}/. project/
     chmod -R u+w project
-    cp ${library}/user.init.gradle "$GRADLE_USER_HOME/init.d/gradle-purifier.gradle"
+    cp ${library}/pkgs/build-gradle-project/user.init.gradle "$GRADLE_USER_HOME/init.d/gradle-purifier.gradle"
     cp -R ${wrapperHome} "$GRADLE_USER_HOME/wrapper"
     chmod -R u+w "$GRADLE_USER_HOME/wrapper"
     mkdir -p project/.gradle/purifier
