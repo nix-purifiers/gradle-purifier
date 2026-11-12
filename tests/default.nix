@@ -50,6 +50,25 @@ let
     doCheck = true;
   };
 
+  # The first top-50 survey pilot: Java 17, UTF-8 Javadoc and a Vanniktech
+  # Maven publication which requires signing keys only at deployment time.
+  firecrawl =
+    let
+      pinned = lib.importJSON ./real-world/firecrawl.json;
+      source = pkgs.fetchFromGitHub {
+        inherit (pinned)
+          owner
+          repo
+          rev
+          hash
+          ;
+      };
+    in
+    build {
+      src = source + "/apps/java-sdk";
+      lockFile = ./real-world/firecrawl.lock.json;
+    };
+
   # Fails unless every file of `files` (paths relative to `root`) exists.
   expectFiles =
     name: root: files:
@@ -303,6 +322,15 @@ in
     expectFiles "petclinic" petclinic.packages.spring-petclinic [
       "share/archives/spring-petclinic.jar"
     ];
+
+  firecrawl-release = expectFiles "firecrawl-release" firecrawl.release [
+    "firecrawl-java/com/firecrawl/firecrawl-java/1.18.9/firecrawl-java-1.18.9.jar"
+    "firecrawl-java/com/firecrawl/firecrawl-java/1.18.9/firecrawl-java-1.18.9-sources.jar"
+    "firecrawl-java/com/firecrawl/firecrawl-java/1.18.9/firecrawl-java-1.18.9-javadoc.jar"
+    "firecrawl-java/com/firecrawl/firecrawl-java/1.18.9/firecrawl-java-1.18.9.pom"
+    "firecrawl-java/com/firecrawl/firecrawl-java/1.18.9/firecrawl-java-1.18.9.module"
+  ];
+  firecrawl-tests = firecrawl.tests;
 
   # The recorder's mapping between request paths, remote URLs and paths in
   # the tree of locked downloads (tests/RecorderTest.java).

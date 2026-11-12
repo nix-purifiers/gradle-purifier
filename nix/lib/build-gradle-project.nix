@@ -50,6 +50,9 @@
   # The JDKs a build can run on; the default JDK of a build is the headless
   # one of the Java major version its lock was made with.
   javaPackages,
+  # Forked Javadoc/compiler processes on Java 17 and earlier use the
+  # process locale for their default source encoding.
+  glibcLocales,
   # The nix-purifiers library, which fetches the locked downloads and lays
   # them out; the overlay passes the one that the flake pins.
   purifier,
@@ -83,6 +86,16 @@
   srcFilter ? null,
 }:
 let
+  # Set these before the builder shell starts as well as for its children.
+  # Exporting a new locale archive inside Bash is too late for its own
+  # setlocale calls, even though forked Java tools see the new environment.
+  localeEnvironment = {
+    LANG = "en_US.UTF-8";
+    LC_ALL = "en_US.UTF-8";
+  }
+  // lib.optionalAttrs stdenvNoCC.hostPlatform.isLinux {
+    LOCALE_ARCHIVE = "${glibcLocales}/lib/locale/locale-archive";
+  };
   # The packages that the fetchEntry and tree of the library take by name.
   fetcherArgs = {
     inherit
@@ -471,6 +484,7 @@ let
     in
     stdenvNoCC.mkDerivation (finalAttrs: {
       name = project.id;
+      env = localeEnvironment;
       # Gradle's file-lock listener needs loopback UDP even offline.
       ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
       src = filteredSrc;
@@ -613,6 +627,7 @@ let
   # The `check` task of every project of the build, in the sandbox.
   tests = stdenvNoCC.mkDerivation {
     name = "${gradle.rootProjectName}-tests";
+    env = localeEnvironment;
     ${if stdenvNoCC.hostPlatform.isDarwin then "__darwinAllowLocalNetworking" else null} = true;
     src = filteredSrc;
     dontConfigure = true;
