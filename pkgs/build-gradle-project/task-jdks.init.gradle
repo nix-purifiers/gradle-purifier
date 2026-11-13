@@ -30,12 +30,23 @@ if (expected && !sourceSdkMode) {
         'org.gradle.java.installations.auto-download': 'false',
         'org.gradle.java.installations.paths': expected.paths.join(',')]
 }
-def isRootSdkBuild = {
-    def explicit = System.getenv('GRADLE_PURIFIER_BUILD_ROOT') ?: System.getProperty('gradle.purifier.sdk.root')
-    def outermost = gradle
-    while (outermost.parent != null) outermost = outermost.parent
-    def root = explicit ? new File(explicit) : outermost.startParameter.currentDir
-    root.canonicalPath == gradle.rootProject.projectDir.canonicalPath
+// The copied source boundary can contain several native builds. Gradle selects
+// the outer build (including -p/settings discovery); its directory need not be
+// the directory copied by the CLI. Included builds retain their own ownership.
+def isRootSdkBuild = { gradle.parent == null }
+def ownsSdkTask = { task -> isRootSdkBuild() && task.project.gradle.is(gradle) }
+gradle.projectsLoaded { selected ->
+    if (selected.parent != null) return
+    def boundary = System.getenv('GRADLE_PURIFIER_BUILD_ROOT') ?: System.getProperty('gradle.purifier.sdk.root')
+    if (boundary) {
+        // Project objects now exist. Do not inspect an outer root from an
+        // included settings-plugin build that can finish before that point.
+        def source = new File(boundary).canonicalFile.toPath()
+        def root = selected.rootProject.projectDir.canonicalFile.toPath()
+        if (!root.startsWith(source)) {
+            throw new GradleException('gradle-purifier: selected native Gradle root is outside the copied source boundary; provide the containing source tree')
+        }
+    }
 }
 def rows = []
 def observations = Collections.synchronizedMap([:])
@@ -226,7 +237,7 @@ gradle.taskGraph.whenReady { graph ->
     graph.allTasks.each { task ->
         def row = select(task)
         if (row) {
-            if (!isRootSdkBuild()) {
+            if (!ownsSdkTask(task)) {
                 def managerHome = sourceSdkMode ? expected.launchHome : (expected?.managerHome ?: new File(System.getProperty('java.home')).canonicalPath)
                 def allowed = [managerHome] + ((expected?.legacy) ? expected.explicitHomes : [])
                 if (row.home != row.canonicalHome || !allowed.contains(row.home)) throw new GradleException('gradle-purifier: non-manager SDK tasks in nested builds require explicit supported SDK input handling; automatic capture currently covers root-build roles')
@@ -248,7 +259,7 @@ gradle.taskGraph.whenReady { graph ->
     }
 }
 gradle.taskGraph.beforeTask { task ->
-    if (roleOf(task) && isRootSdkBuild()) {
+    if (roleOf(task) && ownsSdkTask(task)) {
         def current = select(task)
         if (mode != 'lock') check(current)
         else if (!sameSelection(rows.find { it.task == task.path && it.role == current.role }, current)) {
@@ -257,7 +268,7 @@ gradle.taskGraph.beforeTask { task ->
     }
 }
 gradle.taskGraph.afterTask { task, state ->
-    if (roleOf(task) && isRootSdkBuild()) {
+    if (roleOf(task) && ownsSdkTask(task)) {
         def completed = select(task)
         if (mode != 'lock') check(completed)
         else {
