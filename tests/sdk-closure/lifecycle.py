@@ -13,6 +13,8 @@ import sys
 
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT/'tests'))
+from fixture_build import command as fixture_build
 
 
 def main():
@@ -98,7 +100,15 @@ def main():
     gradle=project/'.gradle-purifier/distribution/bin/gradle'
     run('split-offline',[shutil.which('bash'),gradle,'--offline','--no-daemon','clean','check'],project,dict(GRADLE_PURIFIER_SDK_TRACE='1'))
     run('split-offline-warm',[shutil.which('bash'),gradle,'--offline','--no-daemon','check'],project,dict(GRADLE_PURIFIER_SDK_TRACE='1'))
-    assert 'GRADLE-SDK-VALIDATED :compileJava/compiler '+sdks['java8']['home'] in (out/'split-offline.log').read_text()
+    # Ordinary prefetch preserves native SDK policy. SDK admission validation is
+    # a separate explicit test of the immutable context reconstructed by Nix.
+    run('split-sdk-validation-context',fixture_build(cli,project,'sdkContext'),project)
+    validation_context=Path((out/'split-sdk-validation-context.log').read_text().strip().splitlines()[-1])
+    library=Path(next(line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith('lib=')))
+    strict_flags=['-Dgradle.purifier.mode=interactive','--init-script',library/'task-jdks.init.gradle']
+    strict_env=dict(GRADLE_PURIFIER_JDK_CONTEXT=str(validation_context),GRADLE_PURIFIER_SDK_TRACE='1')
+    run('split-explicit-sdk-validation',[shutil.which('bash'),gradle,'--offline','--no-daemon',*strict_flags,'check'],project,strict_env)
+    assert 'GRADLE-SDK-VALIDATED :compileJava/compiler '+sdks['java8']['home'] in (out/'split-explicit-sdk-validation.log').read_text()
     expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
       p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};
       in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "SDK_PROJECT";}).tests'''
@@ -114,13 +124,13 @@ def main():
     data=(project/'build/classes/java/main/example/Epoch.class').read_bytes();assert int.from_bytes(data[6:8],'big')==52
     result['classMajor']=52
     assert all((project/name).read_bytes()==data for name,data in originals.items())
-    run('unobserved-role-rejected',[shutil.which('bash'),gradle,'--offline','--no-daemon','javadoc'],project,success=False)
+    run('unobserved-role-rejected',[shutil.which('bash'),gradle,'--offline','--no-daemon',*strict_flags,'javadoc'],project,strict_env,success=False)
     assert 'SDK role :javadoc/javadoc was not selected by the lock' in (out/'unobserved-role-rejected.log').read_text()
     # Effective SDK changes remain invalid even when that other SDK is available.
     build_file=project/'build.gradle';native_definition=build_file.read_text()
     try:
         build_file.write_text(native_definition.replace(sdks['java8']['home'],sdks['java21']['home']))
-        run('recorded-role-sdk-change-rejected',[shutil.which('bash'),gradle,'--offline','--no-daemon','check'],project,success=False)
+        run('recorded-role-sdk-change-rejected',[shutil.which('bash'),gradle,'--offline','--no-daemon',*strict_flags,'check'],project,strict_env,success=False)
         assert 'selected an SDK that differs from its immutable lock' in (out/'recorded-role-sdk-change-rejected.log').read_text()
     finally:build_file.write_text(native_definition)
     # Manager-only locks keep their established format and exact byte identity.
