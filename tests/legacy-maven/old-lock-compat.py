@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Replay old archive-only locks, requiring explicit relock before publication."""
 from pathlib import Path
-import argparse,copy,hashlib,importlib.util,json,os,shutil,subprocess,sys
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
+import argparse,copy,hashlib,importlib.util,json,os,shutil,subprocess
 sys.dont_write_bytecode=True
 p=argparse.ArgumentParser()
 for key in ['cli','baseline-cli','sdks','cache','output']:p.add_argument('--'+key,type=Path,required=True)
@@ -17,13 +21,15 @@ def run(name,cmd,cwd=out,extra=None,rejection=None):
  else:assert r.returncode==0,text[-5000:]
  return text
 def command(tool,attribute,project,lock=None):
+ if (project/"gradle-purifier.sdks.json").exists():return fixture_build(tool,project,attribute,lock)
  settings={s.split('=',1)[0]:s.split('=',1)[1] for s in tool.read_text().splitlines() if s.startswith(('lib=','nixpkgs=','purifier_source='))}
  return ['nix-build','--quiet',Path(settings['lib'])/'command.nix','--argstr','nixpkgs',settings['nixpkgs'],'--argstr','purifierSource',settings['purifier_source'],'--argstr','src',project,'--argstr','lockFile',lock or project/'gradle-purifier.lock.json','-A',attribute,'--no-out-link']
 native=fixture('native');run('native-original',['bash',gradle,'--offline','--no-daemon','clean','check','uploadArchives'],native)
 project=fixture('project');run('released-capture',[baseline,'lock'],project);lock=project/'gradle-purifier.lock.json';old=lock.read_bytes();olddata=json.loads(old);assert all(x['publications']==[] for x in olddata['projects']);(out/'original-old-lock.json').write_bytes(old);coldenv=dict(GRADLE_USER_HOME=str(out/'cold-gradle-home'),XDG_CACHE_HOME=str(out/'cold-cache'));run('prefetch-old-lock',[cli,'prefetch'],project,coldenv);assert not (Path(coldenv['GRADLE_USER_HOME'])/'caches').exists() and not (project/'build').exists();run('old-lock-cold-network-namespace',[shutil.which('unshare'),'-rn','sh','-c','ip link set lo up && exec "$@"','old-unbound-lock','bash',project/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','clean','check'],project,coldenv);run('old-lock-pure-tests',command(cli,'tests',project),project,coldenv)
 originalRelease=Path(run('baseline-old-release',command(baseline,'release',project),project,coldenv).strip().splitlines()[-1]);oldRelease=Path(run('candidate-old-release',command(cli,'release',project),project,coldenv).strip().splitlines()[-1]);assert list(originalRelease.iterdir())==[] and list(oldRelease.iterdir())==[];assert lock.read_bytes()==old
 shutil.rmtree(project/'build');run('old-lock-publish-requires-relock',[cli,'publish','uploadArchives'],project,coldenv,rejection='the lock declares no Maven publications');assert 'gradle-purifier lock --relock' in (out/'old-lock-publish-requires-relock.log').read_text();assert lock.read_bytes()==old and not (project/'repository').exists() and not (project/'build/classes').exists()
-run('explicit-relock-opt-in',[cli,'lock','--relock'],project,coldenv);typed=lock.read_bytes();data=json.loads(typed);publication=data['projects'][0]['publications'][0];assert publication['kind']=='legacy-maven-upload' and publication['uploadTask']==':uploadArchives' and publication['nativeMetadata']==dict(kind='gradle-java-component',version=1);assert typed!=old;(out/'explicitly-upgraded-lock.json').write_bytes(typed);run('typed-matching-pure-tests',command(cli,'tests',project),project,coldenv)
+bind_fixture_sdks(project, 11, [8], cli, sdk)
+run('explicit-relock-opt-in',[cli,'lock','--bind-sdks','--relock'],project,coldenv);typed=lock.read_bytes();data=json.loads(typed);publication=data['projects'][0]['publications'][0];assert publication['kind']=='legacy-maven-upload' and publication['uploadTask']==':uploadArchives' and publication['nativeMetadata']==dict(kind='gradle-java-component',version=1);assert typed!=old;(out/'explicitly-upgraded-lock.json').write_bytes(typed);run('typed-matching-pure-tests',command(cli,'tests',project),project,coldenv)
 for name,field,value,needle in [('malformed-binding','configuration','other','invalid typed publication binding'),('present-changed-binding','artifactId','changed','publication binding changed')]:
  bad=copy.deepcopy(data);bad['projects'][0]['publications'][0][field]=value;payload=json.dumps({k:v for k,v in bad.items() if k!='contentHash'},sort_keys=True,separators=(',',':'),ensure_ascii=False);bad['contentHash']='sha256:'+hashlib.sha256(payload.encode()).hexdigest();file=out/(name+'.lock.json');file.write_text(json.dumps(bad,indent=2));run(name,command(cli,'tests',project,file),project,coldenv,rejection=needle);assert lock.read_bytes()==typed and not (project/'repository').exists()
 projection=Path(run('typed-authoritative-projection',command(cli,'publication',project),project,coldenv).strip().splitlines()[-1]);catalog=json.loads((projection/'catalog.json').read_text());module=next(m for m in catalog['modules'] if m['group']=='example' and m['name']=='epoch');relative=Path('example/epoch')/module['version'];prefix='epoch-'+module['version'];guard=out/'guard.init.gradle';guard.write_text("gradle.projectsEvaluated { gradle.rootProject.tasks.withType(JavaCompile).all { doFirst { throw new GradleException('NATIVE_COMPILATION_DURING_LEGACY_PUBLISH') } } }");run('typed-original-upload',[cli,'publish','uploadArchives','--init-script',guard],project,coldenv);assert not (project/'build/classes').exists()

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Capture a native project plugin and replay with its origin stopped."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
 import os,json,subprocess,shutil,hashlib,threading,http.server,zipfile,argparse,importlib.util
 R=Path(__file__).resolve().parents[2];p=argparse.ArgumentParser()
 for name in ['cli','sdks','cache','output']:p.add_argument('--'+name,type=Path,required=True)
@@ -16,14 +19,15 @@ class H(http.server.SimpleHTTPRequestHandler):
  def do_HEAD(self):requests.append(self.path);super().do_HEAD()
  def log_message(self,*a):pass
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),H);threading.Thread(target=server.serve_forever,daemon=True).start();init=O/'project-plugin-repository.init.gradle';init.write_text("gradle.settingsEvaluated { s -> s.pluginManagement.repositories.clear();s.pluginManagement.repositories.maven { url 'http://127.0.0.1:"+str(server.server_port)+"' } }\n");P=O/'producer';epoch.fixture(P,profile,sdk);cli=a.cli.resolve();library=next(line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith('lib='));c={'cli':str(cli),'storeLibrary':library}
-(P/'build.gradle').write_text("plugins { id 'diagnostic.local' version '1' }\n"+(P/'build.gradle').read_text());source={str(f.relative_to(P)):hashlib.sha256(f.read_bytes()).hexdigest() for f in P.rglob('*') if f.is_file()};env=dict(os.environ,JAVA_HOME=sdk['java11']['home'],GRADLE_USER_HOME=str(O/'capture-gradle-home'),XDG_CACHE_HOME=str(O/'cache'));env['PATH']=sdk['java11']['home']+'/bin:'+env['PATH'];rows=[]
+(P/'build.gradle').write_text("plugins { id 'diagnostic.local' version '1' }\n"+(P/'build.gradle').read_text());bind_fixture_sdks(P, 11, [8], cli, sdk)
+source={str(f.relative_to(P)):hashlib.sha256(f.read_bytes()).hexdigest() for f in P.rglob('*') if f.is_file()};env=dict(os.environ,JAVA_HOME=sdk['java11']['home'],GRADLE_USER_HOME=str(O/'capture-gradle-home'),XDG_CACHE_HOME=str(O/'cache'));env['PATH']=sdk['java11']['home']+'/bin:'+env['PATH'];rows=[]
 def run(name,cmd,extra=None):
  with (O/(name+'.log')).open('w') as f:r=subprocess.run(cmd,cwd=P,env=dict(env,**(extra or {})),stdout=f,stderr=subprocess.STDOUT,timeout=600)
  rows.append(dict(stage=name,command=cmd,exitCode=r.returncode,serverRequestsSoFar=len(requests)));(O/'report.json').write_text(json.dumps(rows,indent=2));print(name,r.returncode,flush=True);assert r.returncode==0,(O/(name+'.log')).read_text()[-4500:]
 try:
  run('native-plugin-check',[str(D/'bin/gradle'),'--no-daemon','--init-script',str(init),'clean','check'])
  assert 'NATIVE_PLUGIN_EXECUTED_42' in (O/'native-plugin-check.log').read_text() and requests
- run('capture',[c['cli'],'lock','--','--init-script',str(init)])
+ run('capture',[c['cli'],'lock','--bind-sdks','--','--init-script',str(init)])
  lock=json.loads((P/'gradle-purifier.lock.json').read_text());assert any('plugin-impl-1.jar' in a.get('url','') for a in lock['artifacts'])
  cold={'GRADLE_USER_HOME':str(O/'cold-gradle-home')};run('prefetch-online-materialize-downloads',[c['cli'],'prefetch'],cold)
  server.shutdown();server.server_close();stopped=True
