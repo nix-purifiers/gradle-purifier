@@ -112,6 +112,11 @@ copy_fixture() {
     mkdir -p "$work/$name/$(dirname "$file")"
     cp "$root/tests/fixtures/$fixture/$file" "$work/$name/$file"
   done
+  # Negative copies keep the source fixture's explicit runtime even when the
+  # copied lock is deliberately malformed or has missing downloads.
+  if [ -f "$work/$fixture-fixture-jvm.json" ]; then
+    cp "$work/$fixture-fixture-jvm.json" "$work/$name-fixture-jvm.json"
+  fi
 }
 
 # The fixtures keep the wrapper properties only; the wrapper script and
