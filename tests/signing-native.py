@@ -19,7 +19,7 @@ def main():
                         help='Native publication init script to exercise (for the old-head negative control)')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    publication_init = args.publication_init or root / 'nix/lib/purifier.init.gradle'
+    publication_init = args.publication_init or root / 'pkgs/build-gradle-project/purifier.init.gradle'
     work = args.results.resolve()
     work.mkdir(parents=True, exist_ok=False)
     source = work / 'project'
@@ -140,7 +140,7 @@ gradle.projectsEvaluated { g ->
             java = java / 'lib/openjdk'
         native = [gradle, '--no-daemon', '--offline', '--no-build-cache', '--no-configuration-cache',
                   '--max-workers=2', '--init-script', publication_init,
-                  '--init-script', root / 'nix/lib/task-jdks.init.gradle', '--init-script', init,
+                  '--init-script', root / 'pkgs/build-gradle-project/task-jdks.init.gradle', '--init-script', init,
                   '-Dorg.gradle.internal.plugins.portal.url.override=' + tree.as_uri() + '/https/plugins.gradle.org/m2',
                   '-x', 'generateMetadataFileForLibraryPublication', 'publishAllPublicationsToReleaseRepository']
         native_env = {'JAVA_HOME': str(java), 'TEST_SIGNING_KEY_FILE': str(key),

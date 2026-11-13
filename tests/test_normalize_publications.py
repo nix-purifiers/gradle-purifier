@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-script = Path(__file__).resolve().parent.parent / "nix/lib/normalize-publications.py"
+script = Path(__file__).resolve().parent.parent / "pkgs/build-gradle-project/normalize-publications.py"
 spec = importlib.util.spec_from_file_location("normalize_publications", script)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

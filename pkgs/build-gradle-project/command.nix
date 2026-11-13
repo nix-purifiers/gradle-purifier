@@ -18,7 +18,7 @@ let
   inherit (pkgs) lib;
   purifier = import purifierSource { inherit lib; };
 in
-pkgs.callPackage ./build-gradle-project.nix { inherit purifier; } {
+pkgs.callPackage ./default.nix { inherit purifier; } {
   src = /. + src;
   lockFile = /. + lockFile;
 }

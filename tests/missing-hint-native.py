@@ -27,7 +27,7 @@ output.mkdir(parents=True, exist_ok=False)
 # The executable must use these actual immutable companions, not the checkout.
 names = ['purifier.init.gradle', 'missing-hint-flow.init.gradle', 'missing-hint-legacy.init.gradle']
 for name in names:
-    assert (lib / name).read_bytes() == (root / 'nix/lib' / name).read_bytes(), name
+    assert (lib / name).read_bytes() == (root / 'pkgs/build-gradle-project' / name).read_bytes(), name
 modern = (lib / names[1]).read_text()
 legacy = (lib / names[2]).read_text()
 def classifier(text):

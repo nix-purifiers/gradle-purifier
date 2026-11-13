@@ -69,7 +69,7 @@ for name, (extra, rejection) in cases.items():
     with (directory / "build.gradle").open("a") as stream:
         stream.write("\n" + extra + "\n")
     init = out / (name + ".init.gradle")
-    init.write_text("gradle.ext.purifierLegacyMaven=[mode:'lock',output:System.getenv('METADATA_OUTPUT'),bindings:[],captureMetadata:true,artifacts:[:]]\napply from:'" + str(root / "nix/lib/legacy-maven.init.gradle") + "'\ngradle.beforeProject { p -> p.plugins.withId('maven') { gradle.ext.purifierLegacyMaven.register(p) } }\n")
+    init.write_text("gradle.ext.purifierLegacyMaven=[mode:'lock',output:System.getenv('METADATA_OUTPUT'),bindings:[],captureMetadata:true,artifacts:[:]]\napply from:'" + str(root / "pkgs/build-gradle-project/legacy-maven.init.gradle") + "'\ngradle.beforeProject { p -> p.plugins.withId('maven') { gradle.ext.purifierLegacyMaven.register(p) } }\n")
     command = ["bash", str(args.gradle.resolve()), "--offline", "--no-daemon", "--init-script", str(init), finish]
     env = dict(os.environ, JAVA_HOME=sdk["java11"]["home"], GRADLE_USER_HOME=str(out / "gradle-home"), XDG_CACHE_HOME=str(out / "cache"), METADATA_OUTPUT=str(out / (name + "-output")))
     with (out / (name + ".log")).open("w") as log:
@@ -90,5 +90,5 @@ for name, (extra, rejection) in cases.items():
     rows.append(dict(case=name, command=command, exitCode=result.returncode, expectedRejection=rejection))
     (out / "report.json").write_text(json.dumps(rows, indent=2))
     print(name, result.returncode, flush=True)
-(out / "source-context.json").write_text(json.dumps({str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (root / "nix/lib").glob("legacy-*.gradle")}, indent=2))
+(out / "source-context.json").write_text(json.dumps({str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (root / "pkgs/build-gradle-project").glob("legacy-*.gradle")}, indent=2))
 print("NATIVE_METADATA_OWNERSHIP_GUARDS_PASS", flush=True)

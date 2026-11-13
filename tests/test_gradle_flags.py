@@ -16,7 +16,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / 'tests/gradle-flags-help'
-spec = importlib.util.spec_from_file_location('gradle_flags', ROOT / 'nix/lib/gradle-flags.py')
+spec = importlib.util.spec_from_file_location('gradle_flags', ROOT / 'pkgs/build-gradle-project/gradle-flags.py')
 flags = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(flags)
 

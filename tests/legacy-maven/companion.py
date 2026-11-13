@@ -5,10 +5,10 @@ import argparse,hashlib,importlib.util,json,os,re,shutil,subprocess,sys
 sys.dont_write_bytecode=True
 p=argparse.ArgumentParser()
 for k in ['cli','project','sdks','gradle','output']:p.add_argument('--'+k,type=Path,required=True)
-a=p.parse_args();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();cli=a.cli.resolve();library=Path(next(line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith('lib=')));source=root/'nix/lib/legacy-maven.init.gradle';expected=hashlib.sha256(source.read_bytes()).hexdigest();assert hashlib.sha256((library/source.name).read_bytes()).hexdigest()==expected
+a=p.parse_args();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();cli=a.cli.resolve();library=Path(next(line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith('lib=')));source=root/'pkgs/build-gradle-project/legacy-maven.init.gradle';expected=hashlib.sha256(source.read_bytes()).hexdigest();assert hashlib.sha256((library/source.name).read_bytes()).hexdigest()==expected
 expr='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SOURCE");p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_PROJECT";}).packages.epoch''';env=dict(os.environ,LEGACY_SOURCE=str(root),LEGACY_PROJECT=str(a.project.resolve()));r=subprocess.run(['nix','derivation','show','--impure','--expr',expr],env=env,capture_output=True,text=True,timeout=90);assert r.returncode==0,r.stderr;data=json.loads(r.stdout);(out/'builder-derivation.json').write_text(json.dumps(data,indent=2));drv=next(iter(data.get('derivations',data).values()));script=Path(re.search(r'--init-script (\S+/purifier\.init\.gradle)',drv['env']['buildPhase']).group(1));companion=script.parent/source.name;assert hashlib.sha256(companion.read_bytes()).hexdigest()==expected
 for helper in ['legacy-native-metadata.init.gradle','legacy-native-inputs.init.gradle','validate-legacy-native-metadata.py']:
- assert (library/helper).read_bytes()==(root/'nix/lib'/helper).read_bytes()==(script.parent/helper).read_bytes()
+ assert (library/helper).read_bytes()==(root/'pkgs/build-gradle-project'/helper).read_bytes()==(script.parent/helper).read_bytes()
 # The public flake builder and packaged command must identify the exact same
 # producer, not merely contain identical companion bytes under different names.
 settings={line.split('=',1)[0]:line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith(('lib=','nixpkgs=','purifier_source='))}
@@ -17,7 +17,7 @@ flake=subprocess.run(['nix','eval','--raw','--impure','--expr',expr+'.drvPath'],
 assert command.stdout.strip()==flake.stdout.strip(),(command.stdout,flake.stdout)
 # Altering trusted source must create a distinct immutable source identity;
 # this is a Nix identity proof, not a runtime signature or arbitrary tamper guard.
-original=out/'original-lib';altered=out/'altered-lib';shutil.copytree(root/'nix/lib',original);shutil.copytree(original,altered);f=altered/source.name;f.write_text(f.read_text()+'\n// Deliberately changed source identity for test.\n')
+original=out/'original-lib';altered=out/'altered-lib';shutil.copytree(root/'pkgs/build-gradle-project',original);shutil.copytree(original,altered);f=altered/source.name;f.write_text(f.read_text()+'\n// Deliberately changed source identity for test.\n')
 def store(path):
  r=subprocess.run(['nix','eval','--raw','--impure','--expr','toString (builtins.path { path = /. + builtins.getEnv "LIB_INPUT"; name = "lib"; })'],env=dict(os.environ,LIB_INPUT=str(path)),capture_output=True,text=True,timeout=45);assert r.returncode==0,r.stderr;return r.stdout.strip()
 before=store(original);after=store(altered);assert before!=after;assert hashlib.sha256((Path(before)/source.name).read_bytes()).hexdigest()==expected;assert hashlib.sha256((Path(after)/source.name).read_bytes()).hexdigest()!=expected

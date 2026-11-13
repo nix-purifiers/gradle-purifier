@@ -10,7 +10,7 @@ parser.add_argument('--cache',type=Path,required=True)
 parser.add_argument('--sdks',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 args=parser.parse_args()
-repo=Path(__file__).resolve().parents[2];out=args.output.resolve();out.mkdir(parents=True,exist_ok=False);cli=args.cli.resolve();variables={k:v for k,v in re.findall(r'^(lib|sdk_descriptor)=(.+)$',cli.read_text(),re.M)};lib=Path(variables['lib']);descriptor=json.loads(Path(variables['sdk_descriptor']).read_text());spec=importlib.util.spec_from_file_location('epoch',repo/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch);spec=importlib.util.spec_from_file_location('capture',repo/'nix/lib/capture-project-jdks.py');capture=importlib.util.module_from_spec(spec);spec.loader.exec_module(capture);sdks=json.loads(args.sdks.read_text());profile=next(p for p in json.loads((repo/'tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-7.6.6');args.cache=args.cache.resolve();args.cache.mkdir(parents=True,exist_ok=True);gradle=epoch.distribution(profile,args.cache)
+repo=Path(__file__).resolve().parents[2];out=args.output.resolve();out.mkdir(parents=True,exist_ok=False);cli=args.cli.resolve();variables={k:v for k,v in re.findall(r'^(lib|sdk_descriptor)=(.+)$',cli.read_text(),re.M)};lib=Path(variables['lib']);descriptor=json.loads(Path(variables['sdk_descriptor']).read_text());spec=importlib.util.spec_from_file_location('epoch',repo/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch);spec=importlib.util.spec_from_file_location('capture',repo/'pkgs/build-gradle-project/capture-project-jdks.py');capture=importlib.util.module_from_spec(spec);spec.loader.exec_module(capture);sdks=json.loads(args.sdks.read_text());profile=next(p for p in json.loads((repo/'tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-7.6.6');args.cache=args.cache.resolve();args.cache.mkdir(parents=True,exist_ok=True);gradle=epoch.distribution(profile,args.cache)
 context=dict(scope='Native SDK selection controls; full lifecycle proof is recorded separately.',sdkInputs=sdks,profile=profile,
  sourceRevision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),cli=str(cli),immutableLib=str(lib),
  sourceHashes={p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=repo,text=True).splitlines() if (repo/p).is_file()})
@@ -48,7 +48,7 @@ for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conf
   assert r.returncode!=0 and 'conflicting provider and explicit SDKs' in (case/'run.log').read_text();result=dict(case=name,rejected=True,reason='conflicting provider and explicit SDKs')
  else:
   assert r.returncode==0,(name,(case/'run.log').read_text()[-3000:]);receipt=json.loads((case/'output/task-sdks.json').read_text());assert len(receipt['tasks'])==3 and all(t['selectionProvenance']=='configured-native-executable' for t in receipt['tasks'])
-  try:context=capture.capture(receipt,descriptor,repo/'nix/lib/capture-project-jdk.nix')
+  try:context=capture.capture(receipt,descriptor,repo/'pkgs/build-gradle-project/capture-project-jdk.nix')
   except ValueError as e:
    assert name.startswith('alias') and 'unsupported ambient or mutable SDK home' in str(e),(name,e);result=dict(case=name,rejected=True,reason=str(e))
   else:
@@ -61,7 +61,7 @@ import copy
 receipt=json.loads((out/'exact-immutable/output/task-sdks.json').read_text())
 accepted=json.loads((out/'exact-immutable/context.json').read_text())
 def rejected_receipt(name,value,needle):
- try:capture.capture(value,descriptor,repo/'nix/lib/capture-project-jdk.nix')
+ try:capture.capture(value,descriptor,repo/'pkgs/build-gradle-project/capture-project-jdk.nix')
  except ValueError as error:
   assert needle in str(error),(name,error);rows.append(dict(case=name,rejected=True,reason=str(error)))
  else:raise AssertionError(name+' accepted')
@@ -94,7 +94,7 @@ def boundary(name,contexts,valid):
  file=out/(name+'.lock.json');file.write_text(json.dumps(lock,indent=2)+'\n')
  expr='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
  p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[];};
- read=import (/. + builtins.getEnv "SDK_SOURCE" + "/nix/lib/read-lock.nix") {lib=p.lib;};
+ read=import (/. + builtins.getEnv "SDK_SOURCE" + "/lib-overlays/default/read-lock.nix") {lib=p.lib;};
  in (read {src=/. + builtins.getEnv "SDK_SOURCE" + "/tests/fixtures/java-library";
  lockFile=/. + builtins.getEnv "SDK_LOCK";}).problems'''
  problems=json.loads(subprocess.check_output(['nix','eval','--json','--impure','--expr',expr],env=dict(env,SDK_LOCK=str(file)),text=True))

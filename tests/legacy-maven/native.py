@@ -36,7 +36,7 @@ cases = {
 for name,(extra,coordinates,rejection) in cases.items():
  work=out/name;work.mkdir();project=work/'project';epoch.fixture(project,profile,sdks)
  with (project/'build.gradle').open('a') as f:f.write('\n'+extra+'\n')
- env=dict(os.environ,JAVA_HOME=sdks['java11']['home'],GRADLE_USER_HOME=str(out/'gradle-home'),NATIVE_OUTPUT=str(work/'snapshot'),NATIVE_DESCRIPTOR=str(work/'descriptor.json'),LEGACY_COMPANION=str(root/'nix/lib/legacy-maven.init.gradle'))
+ env=dict(os.environ,JAVA_HOME=sdks['java11']['home'],GRADLE_USER_HOME=str(out/'gradle-home'),NATIVE_OUTPUT=str(work/'snapshot'),NATIVE_DESCRIPTOR=str(work/'descriptor.json'),LEGACY_COMPANION=str(root/'pkgs/build-gradle-project/legacy-maven.init.gradle'))
  def run(stage,tasks,script=False):
   cmd=['bash',str(args.gradle.resolve()),'--offline','--no-daemon']+(['--init-script',str(init)] if script else [])+tasks
   with (work/(stage+'.log')).open('w') as log:r=subprocess.run(cmd,cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=180)

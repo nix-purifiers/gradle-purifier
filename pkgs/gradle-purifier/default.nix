@@ -46,7 +46,14 @@ let
     dontInstall = true;
   };
 
-  nixLib = ../../nix/lib;
+  runtimeSource = lib.fileset.toSource {
+    root = ../..;
+    fileset = lib.fileset.unions [
+      ../../lib-overlays/default
+      ../build-gradle-project
+    ];
+  };
+  nixLib = runtimeSource + "/pkgs/build-gradle-project";
   sdkDescriptor = writeText "gradle-sdk-source.json" (
     builtins.toJSON (
       if sdkSource != null && sdkSourcePath != null && toString path == toString sdkSourcePath then
@@ -87,7 +94,7 @@ writeShellApplication {
         "${nixLib}"
         "${recorder}"
         "${jdk.home or "${jdk}/lib/openjdk"}"
-        (toString (import ../../nix/lib/lock-version.nix))
+        (toString (import ../../lib-overlays/default/lock-version.nix))
         "${sdkDescriptor}"
         "${path}"
         "${purifierSource}"

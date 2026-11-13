@@ -13,19 +13,24 @@ let
   inherit (pkgs) lib;
   purifier = import helper.outPath { inherit lib; };
   project = if args ? project then builtins.fetchTree args.project else null;
-  resolved = import (library.outPath + "/project-sdk-sources.nix") { inherit lib purifier; } {
-    inherit (args) declaration declarationHash system;
-  };
-  build = pkgs.callPackage (library.outPath + "/build-gradle-project.nix") { inherit purifier; } {
-    src = project.outPath;
-    lockFile = (builtins.fetchTree args.lock).outPath + "/lock.json";
-  };
+  resolved =
+    import (library.outPath + "/pkgs/build-gradle-project/project-sdk-sources.nix")
+      { inherit lib purifier; }
+      {
+        inherit (args) declaration declarationHash system;
+      };
+  build =
+    pkgs.callPackage (library.outPath + "/pkgs/build-gradle-project/default.nix") { inherit purifier; }
+      {
+        src = project.outPath;
+        lockFile = (builtins.fetchTree args.lock).outPath + "/lock.json";
+      };
 in
 if args.mode == "preflight" then
   pkgs.writeText "gradle-project-sdk-source-context.json" (builtins.toJSON resolved.runtimeContext)
 else if args.mode == "hash" then
   pkgs.writeText "gradle-project-inputs-hash" (
-    import (library.outPath + "/inputs.nix") {
+    import (library.outPath + "/lib-overlays/default/inputs.nix") {
       inherit lib;
       src = project.outPath;
       gradleArguments = args.gradleArguments;

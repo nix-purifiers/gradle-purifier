@@ -9,12 +9,12 @@ describes what it does for a user.
 
 ## What it owns
 
-- The init script (`nix/lib/purifier.init.gradle`): the redirection of
+- The init script (`pkgs/build-gradle-project/purifier.init.gradle`): the redirection of
   every remote repository, the tasks and the project description of the
   lock run, the sandbox build of a project, the replacement of
   publication artifacts in publish mode, and the hint after a build that
   needed a download the lock does not hold.
-- The everyday init script (`nix/lib/user.init.gradle`), which `prefetch`
+- The everyday init script (`pkgs/build-gradle-project/user.init.gradle`), which `prefetch`
   installs in the `init.d` of the Gradle user home. It applies the init
   script in interactive mode to the builds of a root that `prefetch`
   prepared.
@@ -23,21 +23,21 @@ describes what it does for a user.
   lockfile pins.
 - The command (`src/gradle-purifier.sh`, packaged by `pkgs/gradle-purifier`):
   `lock`, `update`, `prefetch` and `publish`.
-- The Nix library (`nix/lib`). The builder
-  (`nix/lib/build-gradle-project.nix`) is a package for `callPackage`.
+- The public Nix library (`lib-overlays/default`). The builder
+  (`pkgs/build-gradle-project/default.nix`) is a package for `callPackage`.
   The default package overlay adds the scope `gradle-purifier` of `pkgs/`
   to the package set, and the scope holds the builder as
   `buildGradleProject`, beside the command. The builder takes the fetchers and the tree of locked
   downloads from the shared nix-purifiers library. `readLock` is in
-  `lib.gradle-purifier`. The command builds through `nix/lib/command.nix`,
+  `lib.gradle-purifier`. The command builds through `pkgs/build-gradle-project/command.nix`,
   which calls the same builder, so the command and the flake check a
   lockfile alike.
-- The lockfile format (`nix/lib/read-lock.nix`, and the `jq` program of
+- The lockfile format (`lib-overlays/default/read-lock.nix`, and the `jq` program of
   `lock` in the command), versioned by its `version` field and sealed by
   its `contentHash`. A file entry is `{ url, hash }` and an inline entry
   `{ path, contents }`; `readLock` derives the path and the mirrors of a
   file entry. `inputsHash` is the hash of the build definition
-  (`nix/lib/inputs.nix`), which the command and the stale check compute
+  (`lib-overlays/default/inputs.nix`), which the command and the stale check compute
   with the same file.
 
 ## Principles

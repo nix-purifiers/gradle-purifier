@@ -25,12 +25,12 @@ def main():
     variables={line.split('=',1)[0]:line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith(('lib=','sdk_descriptor='))}
     descriptor=json.loads(Path(variables['sdk_descriptor']).read_text())
     receipt=json.loads((project/'.gradle-purifier/lock-run/output/task-sdks.json').read_text())
-    spec=importlib.util.spec_from_file_location('capture',ROOT/'nix/lib/capture-project-jdks.py')
+    spec=importlib.util.spec_from_file_location('capture',ROOT/'pkgs/build-gradle-project/capture-project-jdks.py')
     capture=importlib.util.module_from_spec(spec);spec.loader.exec_module(capture)
-    (out/'source-hashes.json').write_text(json.dumps({name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ['nix/lib/capture-project-jdks.py','nix/lib/capture-project-jdk.nix','nix/lib/project-jdks.nix','nix/lib/read-lock.nix','nix/lib/task-jdks.init.gradle','nix/lib/build-gradle-project.nix','tests/sdk-closure/negative.py']},indent=2)+'\n')
+    (out/'source-hashes.json').write_text(json.dumps({name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ['pkgs/build-gradle-project/capture-project-jdks.py','pkgs/build-gradle-project/capture-project-jdk.nix','pkgs/build-gradle-project/project-jdks.nix','lib-overlays/default/read-lock.nix','pkgs/build-gradle-project/task-jdks.init.gradle','pkgs/build-gradle-project/default.nix','tests/sdk-closure/negative.py']},indent=2)+'\n')
     evidence=[]
     def rejected(name,value,needle):
-        try:capture.capture(value,descriptor,ROOT/'nix/lib/capture-project-jdk.nix')
+        try:capture.capture(value,descriptor,ROOT/'pkgs/build-gradle-project/capture-project-jdk.nix')
         except ValueError as error:
             assert needle in str(error),(name,str(error));evidence.append(dict(case=name,rejected=True,reason=str(error)))
         else:raise AssertionError(name+' was accepted')
@@ -70,7 +70,7 @@ def main():
         if read_boundary:
             boundary='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
               p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[];};
-              read=import (/. + builtins.getEnv "SDK_SOURCE" + "/nix/lib/read-lock.nix") {lib=p.lib;};
+              read=import (/. + builtins.getEnv "SDK_SOURCE" + "/lib-overlays/default/read-lock.nix") {lib=p.lib;};
               in (read {src=/. + builtins.getEnv "SDK_PROJECT";lockFile=/. + builtins.getEnv "SDK_LOCK";}).problems'''
             observed=subprocess.check_output(['nix','eval','--json','--impure','--expr',boundary],
                 env=dict(env,SDK_LOCK=str(file)),text=True,timeout=30)

@@ -10,8 +10,8 @@
 }:
 {
   # The builder: a package whose value builds a Gradle build from its
-  # lockfile (nix/lib/build-gradle-project.nix).
-  buildGradleProject = callPackage ../nix/lib/build-gradle-project.nix {
+  # lockfile (pkgs/build-gradle-project/default.nix).
+  buildGradleProject = callPackage ./build-gradle-project {
     inherit (lib) purifier;
   };
 

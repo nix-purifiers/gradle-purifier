@@ -33,9 +33,9 @@ def main():
     result=dict(scope='Existing 8.14.3 split21/8 and same21 control only; no SDK support certification',stages=[])
     (out/'context.json').write_text(json.dumps(dict(cli=str(args.cli.resolve()),baselineCli=str(args.baseline_cli.resolve()),
         sdkReceipt=sdk_context,sourceHashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in [
-            'src/gradle-purifier.sh','nix/lib/task-jdks.init.gradle','nix/lib/capture-project-jdks.py',
-            'nix/lib/capture-project-jdk.nix','nix/lib/project-jdks.nix','nix/lib/read-lock.nix',
-            'nix/lib/build-gradle-project.nix','nix/lib/user.init.gradle','pkgs/default.nix',
+            'src/gradle-purifier.sh','pkgs/build-gradle-project/task-jdks.init.gradle','pkgs/build-gradle-project/capture-project-jdks.py',
+            'pkgs/build-gradle-project/capture-project-jdk.nix','pkgs/build-gradle-project/project-jdks.nix','lib-overlays/default/read-lock.nix',
+            'pkgs/build-gradle-project/default.nix','pkgs/build-gradle-project/user.init.gradle','pkgs/default.nix',
             'pkgs/gradle-purifier/default.nix','tests/sdk-closure/lifecycle.py']},sourceRevision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()),indent=2)+'\n')
     def run(stage,command,cwd,extra=None,success=True):
         command=[str(x) for x in command]

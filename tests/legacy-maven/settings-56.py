@@ -24,7 +24,7 @@ try:
   if name=='search-upwards':cwd=P/'child';cwd.mkdir()
   if name=='project-dir':
    selected=P/'selected';selected.mkdir();setting.rename(selected/'settings.gradle');extra=['-p',str(selected)];setting=selected/'settings.gradle'
-  report=O/(name+'-selection.json');env=dict(os.environ,JAVA_HOME=sdk['java11']['home'],GRADLE_USER_HOME=str(O/'gradle-home'),GRADLE_PURIFIER_SETTINGS_REPORT=str(report));cmd=[str(gradle),'--offline','--no-daemon','--init-script',str(R/'nix/lib/legacy-settings-5.6.init.gradle')]+extra+['projects'];before=len(requests)
+  report=O/(name+'-selection.json');env=dict(os.environ,JAVA_HOME=sdk['java11']['home'],GRADLE_USER_HOME=str(O/'gradle-home'),GRADLE_PURIFIER_SETTINGS_REPORT=str(report));cmd=[str(gradle),'--offline','--no-daemon','--init-script',str(R/'pkgs/build-gradle-project/legacy-settings-5.6.init.gradle')]+extra+['projects'];before=len(requests)
   if name in ['remote-plugin','remote-buildscript']:
    cmd.remove('--offline')
    native=[str(gradle),'--no-daemon','projects']
@@ -35,4 +35,4 @@ try:
   with (O/(name+'.log')).open('w') as f:r=subprocess.run(cmd,cwd=cwd,env=env,stdout=f,stderr=subprocess.STDOUT,timeout=180)
   log=(O/(name+'.log')).read_text();row=dict(case=name,expectedPositive=positive,exitCode=r.returncode,remoteRequests=len(requests)-before,sentinelExecuted=any(P.rglob('SETTINGS_EXECUTED')),beforeEvaluationRejection='gradle-purifier: Gradle5.6.4 settings supports' in log,sourcePreserved=setting.read_bytes()==text.encode() if text is not None else True,selection=json.loads(report.read_text()) if report.exists() else None);rows.append(row);(O/'report.json').write_text(json.dumps(rows,indent=2));print(name,r.returncode,flush=True);assert (r.returncode==0)==positive and row['remoteRequests']==0 and not row['sentinelExecuted'] and row['sourcePreserved'] and (positive or row['beforeEvaluationRejection']),log[-3500:]
 finally:
- server.shutdown();(O/'requests.json').write_text(json.dumps(requests));(O/'source-context.json').write_text(json.dumps({'initSha256':hashlib.sha256((R/'nix/lib/legacy-settings-5.6.init.gradle').read_bytes()).hexdigest(),'driverSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'Native-only grammar/selection; no capture integration or support promotion'},indent=2))
+ server.shutdown();(O/'requests.json').write_text(json.dumps(requests));(O/'source-context.json').write_text(json.dumps({'initSha256':hashlib.sha256((R/'pkgs/build-gradle-project/legacy-settings-5.6.init.gradle').read_bytes()).hexdigest(),'driverSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'Native-only grammar/selection; no capture integration or support promotion'},indent=2))

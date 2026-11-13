@@ -4,7 +4,7 @@
 from pathlib import Path
 import argparse,importlib.util,json,os,subprocess,sys
 sys.dont_write_bytecode=True
-p=argparse.ArgumentParser();p.add_argument('--gradle',type=Path,required=True);p.add_argument('--java-home',required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();spec=importlib.util.spec_from_file_location('replay',root/'nix/lib/replay-repositories.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+p=argparse.ArgumentParser();p.add_argument('--gradle',type=Path,required=True);p.add_argument('--java-home',required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();root=Path(__file__).resolve().parents[2];out=a.output.resolve();out.mkdir();spec=importlib.util.spec_from_file_location('replay',root/'pkgs/build-gradle-project/replay-repositories.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 urls=['http://127.0.0.1:8081/repository/','https://EXAMPLE.com:443/repository/','http://example.com:80/repository/','http://example.com:8081/repository/','http://hex-3132372e302e302e31.example:8081/repository/','http://example-com.example:8081/repository/']
 invalid=['http://[::1]:8081/repository/','http://example_com:80/repository/','http://user:secret@example.com:80/repository/','http://example%2ecom:80/repository/','http://example.com:080/repository/','http://example.com:80/repository/?x=1','http://example.com:80/repository/#fragment','http://example.com:80/a/../repository/','http://example.com:80/a/%2e%2e/repository/','http://example.com:80/a/%5crepository/','http://example.com:70000/repository/']
 source=out/'raw';source.mkdir()
@@ -21,7 +21,7 @@ collision=out/'collision';collision.mkdir();(collision/module.NAMESPACE).mkdir()
 try:module.project(collision,out/'collision-result',urls)
 except ValueError as error:assert 'reserved replay namespace' in str(error)
 else:raise AssertionError('reserved namespace accepted')
-text=(root/'nix/lib/purifier.init.gradle').read_text();body='class PurifierRepositoryReplay {'+text.split('class PurifierRepositoryReplay {',1)[1].split('\ndef standIn =',1)[0];cases=out/'urls.json';cases.write_text(json.dumps(dict(valid=urls,invalid=invalid)));init=out/'mapping.init.gradle';init.write_text('import groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\n'+body+'''
+text=(root/'pkgs/build-gradle-project/purifier.init.gradle').read_text();body='class PurifierRepositoryReplay {'+text.split('class PurifierRepositoryReplay {',1)[1].split('\ndef standIn =',1)[0];cases=out/'urls.json';cases.write_text(json.dumps(dict(valid=urls,invalid=invalid)));init=out/'mapping.init.gradle';init.write_text('import groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\n'+body+'''
 def cases=new JsonSlurper().parse(new File(System.getenv('MAPPING_CASES')))
 def rows=[]
 cases.valid.each { url ->

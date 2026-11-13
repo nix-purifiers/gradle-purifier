@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 tool = sys.argv.pop(1)
-script = Path(__file__).resolve().parent.parent / 'nix/lib/export-runtime.py'
+script = Path(__file__).resolve().parent.parent / 'pkgs/build-gradle-project/export-runtime.py'
 
 
 class RuntimeMetadataTests(unittest.TestCase):
