@@ -127,8 +127,10 @@ def main():
     same=out/'same-manager';same_profile=dict(profile,projectCompiler='java21',projectRuntime='java21')
     epoch.fixture(same,same_profile,sdks)
     run('same-baseline-capture',[baseline,'lock'],same)
-    (out/'same-selected-sdk.json').write_bytes((same/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
     same_lock=same/'gradle-purifier.lock.json';before=same_lock.read_bytes()
+    run('same-legacy-sdk-observation',[legacy,'lock','--relock'],same)
+    assert same_lock.read_bytes()==before, 'legacy observation changed manager-only baseline bytes'
+    (out/'same-selected-sdk.json').write_bytes((same/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
     run('same-new-cold-relock',[cli,'lock','--relock'],same);assert same_lock.read_bytes()==before
     run('same-new-warm-relock',[cli,'lock','--relock'],same);assert same_lock.read_bytes()==before
     assert 'projectJdks' not in json.loads(before)
