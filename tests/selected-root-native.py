@@ -1,5 +1,7 @@
+# SPDX-License-Identifier: MIT
+"""Native Gradle 8.14.6/JDK17 root ownership, with a real JDK8 negative."""
 from pathlib import Path
-import os,subprocess,json,hashlib,shutil
+import os,subprocess,json,hashlib,shutil,re
 # SPDX-License-Identifier: MIT
 # Exercise real Gradle ownership; SDK receipts are emitted only by the installed init script.
 import argparse
@@ -15,6 +17,12 @@ new=installed_helper(CLI);old=installed_helper(args.baseline_cli.resolve())
 assert new.read_bytes()==(W/'pkgs/build-gradle-project/task-jdks.init.gradle').read_bytes()
 gradle=args.gradle.resolve();java=args.java_home.resolve();java8=args.java8_home.resolve()
 assert gradle.is_file() and (java/'bin/java').is_file() and (java8/'bin/java').is_file()
+tool_env=dict(os.environ,JAVA_HOME=str(java),GRADLE_OPTS='-XX:ActiveProcessorCount=2')
+version=subprocess.run([str(gradle),'--version'],env=tool_env,capture_output=True,text=True,check=True)
+assert re.search(r'^Gradle 8[.]14[.]6$',version.stdout,re.M),version.stdout
+java_version=subprocess.run([str(java/'bin/java'),'-version'],capture_output=True,text=True,check=True)
+assert re.search(r'version "17[.]',java_version.stderr),java_version.stderr
+(O/'tool-versions.json').write_text(json.dumps({'gradle':version.stdout,'java':java_version.stderr},indent=2)+'\n')
 observer='''import groovy.json.JsonOutput
 import java.security.MessageDigest
 def destination = new File(System.getenv('ROOT_TEST_API'))
@@ -55,7 +63,7 @@ boundary=fixture(O/'boundary');outside=fixture(O/'boundary-sibling');run('outsid
 oldBuild=(included/'build.gradle').read_text();(included/'build.gradle').write_text(oldBuild+"\njava { toolchain { languageVersion = JavaLanguageVersion.of(8) } }\n");run('included-nonmanager-reject',full,full,['-p','lib/kotlin','compileJava','--rerun-tasks'],success=False,receipt=False,reason='non-manager SDK tasks in nested builds require explicit supported SDK input handling');(included/'build.gradle').write_text(oldBuild)
 # Existing full-source definition hashing, not selector parsing, invalidates argument/settings changes.
 def definition(args):
- expr='let f=builtins.getFlake "path:'+str(W)+'";p=import f.inputs.nixpkgs {system=builtins.currentSystem;};in import '+str(W)+'/lib-overlays/default/inputs.nix {lib=p.lib;src='+str(full)+';gradleArguments='+json.dumps(args).replace(',','')+';}'
+ expr='let f=builtins.getFlake "path:'+str(W)+'";p=import f.inputs.nixpkgs {system=builtins.currentSystem;};in import '+str(W)+'/lib-overlays/default/inputs.nix {lib=p.lib;src='+str(full)+';gradleArguments='+'builtins.fromJSON '+json.dumps(json.dumps(args))+';}'
  return subprocess.check_output(['nix','eval','--impure','--raw','--expr',expr],text=True)
 h=definition(['-p','lib/kotlin']);assert h!=definition(['-p','lib/java']);settings=selected/'settings.gradle';original=settings.read_bytes();settings.write_bytes(original+b'\n// definition mutation\n');assert h!=definition(['-p','lib/kotlin']);settings.write_bytes(original)
 (O/'proof.json').write_text(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=W,text=True).strip(),'cli':str(CLI),'installedAdapter':str(new),'adapterSHA256':hashlib.sha256(new.read_bytes()).hexdigest(),'runs':rows,'defaultReceiptBaselineCandidateRelockByteEqual':True,'nestedSDKReceiptNativeCallback':True,'includedFirstNoReceiptOverwrite':True,'ancestorDiscoveryActualAPI':True,'outsideAndSymlinkRootReject':True,'filteredSiblingFailsNatively':True,'includedNonmanagerGuardPreserved':True,'argsAndSettingsHashMutation':True,'scope':'Real Gradle8.14.6/JDK17 publicAPI ownership smoke; separate actualThrift and boundSDKCLI proof still required.'},indent=2)+'\n');print('API ROOT PROOF PASS',flush=True)
