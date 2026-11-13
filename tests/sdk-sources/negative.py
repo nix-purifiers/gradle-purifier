@@ -135,7 +135,8 @@ strict_file = out/'enabled-strict-lock.json'
 strict_file.write_text(json.dumps(strict_lock,indent=2)+'\n')
 run('disabled-test-pure-enabled',[sys.executable,helper,'build',*common,
     '--project',project,'--lock',strict_file,'--attribute','tests','--root',out/'enabled-strict-tests'],
-    project,False,'was not selected by the lock')
+    project,False,'was not selected by the lock',
+    {'NIX_CONFIG': os.environ.get('NIX_CONFIG','')+'\nlog-lines = 1000\n'})
 # Capture may supply startup defaults. Ordinary commands require original native discovery.
 project = clone('missing-discovery')
 (project/'gradle.properties').unlink()
