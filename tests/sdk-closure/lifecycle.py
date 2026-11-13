@@ -30,7 +30,7 @@ def main():
     home=out/'home';home.mkdir()
     env=dict(os.environ,JAVA_HOME=sdks['java21']['home'],HOME=str(home),GRADLE_USER_HOME=str(home/'.gradle'))
     env['PATH']=env['JAVA_HOME']+'/bin:'+env['PATH']
-    result=dict(scope='Existing 8.14.3 split21/8 and same21 control only; no SDK support certification',stages=[])
+    result=dict(scope='Existing 8.14.3 authentic legacy-v1 split21/8 replay, plain caller-runtime capture and same21 byte control; explicit source-v2 split21/8 binding remains a separate outstanding lane',stages=[])
     (out/'context.json').write_text(json.dumps(dict(cli=str(args.cli.resolve()),baselineCli=str(args.baseline_cli.resolve()),
         sdkReceipt=sdk_context,sourceHashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in [
             'src/gradle-purifier.sh','pkgs/build-gradle-project/task-jdks.init.gradle','pkgs/build-gradle-project/capture-project-jdks.py',
@@ -48,7 +48,7 @@ def main():
     def up_to_date_capture(label,project,cli):
         variables={line.split('=',1)[0]:line.split('=',1)[1] for line in cli.read_text().splitlines() if line.startswith(('lib=','sdk_descriptor='))}
         library=Path(variables['lib']);work=project/'.gradle-purifier/lock-run'
-        selected=(work/'output/task-sdks.json').read_bytes()
+        selected=(out/(label+'-selected-sdk.json')).read_bytes()
         diagnostic=out/(label+'-up-to-date-sdk');diagnostic.mkdir()
         distribution=project/'.gradle-purifier/distribution/bin/gradle'
         extra=dict(GRADLE_PURIFIER_MODE='lock',GRADLE_PURIFIER_REPOSITORY='file://'+str(project/'.gradle-purifier/repository'),
@@ -66,10 +66,20 @@ def main():
     cli=args.cli.resolve();baseline=args.baseline_cli.resolve()
     project=out/'split';epoch.fixture(project,profile,sdks)
     originals={str(p.relative_to(project)):p.read_bytes() for p in project.rglob('*') if p.is_file()}
-    run('split-capture',[cli,'lock'],project)
+    run('split-v1-baseline-capture',[baseline,'lock'],project)
+    (out/'split-selected-sdk.json').write_bytes((project/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
     lock_path=project/'gradle-purifier.lock.json';first=lock_path.read_bytes()
     locked=json.loads(first);assert 'projectJdks' in locked
-    run('split-relock',[cli,'lock','--relock'],project);assert lock_path.read_bytes()==first
+    run('split-v1-baseline-relock',[baseline,'lock','--relock'],project);assert lock_path.read_bytes()==first
+    # Current ordinary capture deliberately records dependency resolution only.
+    caller=out/'split-caller-runtime';epoch.fixture(caller,profile,sdks)
+    run('split-caller-runtime-capture',[cli,'lock'],caller)
+    caller_lock=caller/'gradle-purifier.lock.json';caller_first=caller_lock.read_bytes()
+    assert 'projectJdks' not in json.loads(caller_first)
+    run('split-caller-runtime-relock',[cli,'lock','--relock'],caller)
+    assert caller_lock.read_bytes()==caller_first
+    assert lock_path.read_bytes()==first, 'candidate caller capture changed retained authentic v1 lock'
+    result['plainCaptureDoesNotBindSDKs']=True
     run('split-prefetch',[cli,'prefetch'],project)
     # Runtime diagnostic state must not affect a sandboxed producer identity.
     identity_expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "SDK_SOURCE");
@@ -116,6 +126,7 @@ def main():
     same=out/'same-manager';same_profile=dict(profile,projectCompiler='java21',projectRuntime='java21')
     epoch.fixture(same,same_profile,sdks)
     run('same-baseline-capture',[baseline,'lock'],same)
+    (out/'same-selected-sdk.json').write_bytes((same/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
     same_lock=same/'gradle-purifier.lock.json';before=same_lock.read_bytes()
     run('same-new-cold-relock',[cli,'lock','--relock'],same);assert same_lock.read_bytes()==before
     run('same-new-warm-relock',[cli,'lock','--relock'],same);assert same_lock.read_bytes()==before
@@ -125,7 +136,10 @@ def main():
     same_gradle=same/'.gradle-purifier/distribution/bin/gradle'
     run('same-offline',[shutil.which('bash'),same_gradle,'--offline','--no-daemon','check'],same)
     run('same-publish',[cli,'publish','publishProofPublicationToMavenRepository'],same)
-    result.update(splitRelockByteIdentical=True,sameBaselineColdWarmByteIdentical=True,sourcePreserved=True)
+    assert lock_path.read_bytes()==first, 'candidate replay changed the authentic v1 lock'
+    result.update(legacyV1BaselineRelockByteIdentical=True,legacyV1CandidateReplayLockUnchanged=True,
+                  sameBaselineColdWarmByteIdentical=True,sourcePreserved=True,
+                  sourceV2Strict21And8Binding='outstanding: requires genuine published manager21 adapter source')
     (out/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
 
 
