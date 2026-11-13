@@ -17,8 +17,10 @@ new=installed_helper(CLI);old=installed_helper(args.baseline_cli.resolve())
 assert new.read_bytes()==(W/'pkgs/build-gradle-project/task-jdks.init.gradle').read_bytes()
 gradle=args.gradle.resolve();java=args.java_home.resolve();java8=args.java8_home.resolve()
 assert gradle.is_file() and (java/'bin/java').is_file() and (java8/'bin/java').is_file()
-tool_env=dict(os.environ,JAVA_HOME=str(java),GRADLE_OPTS='-XX:ActiveProcessorCount=2')
-version=subprocess.run([str(gradle),'--version'],env=tool_env,capture_output=True,text=True,check=True)
+tool_env=dict(os.environ,JAVA_HOME=str(java),GRADLE_OPTS='-XX:ActiveProcessorCount=2',GRADLE_USER_HOME=str(O/'tool-gradle-home'))
+version=subprocess.run([str(gradle),'--version'],env=tool_env,capture_output=True,text=True)
+(O/'gradle-version.log').write_text(version.stdout+version.stderr)
+assert version.returncode==0,version.stderr
 assert re.search(r'^Gradle 8[.]14[.]6$',version.stdout,re.M),version.stdout
 java_version=subprocess.run([str(java/'bin/java'),'-version'],capture_output=True,text=True,check=True)
 assert re.search(r'version "17[.]',java_version.stderr),java_version.stderr
