@@ -23,7 +23,7 @@ sdks=json.loads(args.sdks.read_text());cli=args.cli.resolve()
 spec=importlib.util.spec_from_file_location('epoch',ROOT/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch)
 profile=next(p for p in json.loads((ROOT/'tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-7.6.6')
 args.cache=args.cache.resolve();args.cache.mkdir(parents=True,exist_ok=True);gradle=epoch.distribution(profile,args.cache)
-context=dict(scope='One existing fixture/profile only; skipped Test supplies selection, not runtime execution credit',profile=profile,sdks=sdks,
+context=dict(scope='One existing source-bound17/8 fixture/profile; legacy disabled-Test selection is checked separately by explicit-native.py, not credited as runtime execution',profile=profile,sdks=sdks,
  sourceRevision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),cli=str(cli),
  sourceHashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=ROOT,text=True).splitlines() if (ROOT/p).is_file()})
 (out/'context.json').write_text(json.dumps(context,indent=2)+'\n');stages=[]
