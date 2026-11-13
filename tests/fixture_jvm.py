@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Explicit packaged JVM selection for repository fixtures, outside prefetch."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -23,13 +24,11 @@ def fixture_jvm(cli, major, root):
     specification = re.search(r'java.specification.version = ([^\s]+)', observed.stderr).group(1)
     actual_major = int(specification.split('.')[1] if specification.startswith('1.') else specification)
     assert actual_major == int(major), observed.stderr
-    import hashlib
     receipt = {'major': actual_major, 'package': str(package), 'home': str(home), 'argv': command,
                'cli': str(Path(cli).resolve()), 'cliSHA256': hashlib.sha256(Path(cli).read_bytes()).hexdigest(),
                'nixpkgs': nixpkgs, 'nativeVersionOutput': observed.stderr}
     (root / f'jdk-{int(major)}.json').write_text(json.dumps(receipt, indent=2) + '\n')
     return receipt
-
 
 
 
