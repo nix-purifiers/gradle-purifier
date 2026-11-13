@@ -31,9 +31,9 @@ full_context=capture.capture(full_receipt,descriptor,repo/'pkgs/build-gradle-pro
 test_role=next(role for role in full_context['roles'] if role['task']==':test')
 assert test_role['provenance']=='native-effective-fork-options'
 assert next(sdk for sdk in full_context['sdks'] if sdk['identityHash']==test_role['sdk'])['home']==sdks['java17']['home']
-rows.append(dict(case='unchanged-full-fixture-native-test-runtime',exitCode=failure.returncode,accepted=True))
+rows.append(dict(case='unchanged-full-fixture-native-test-selection',exitCode=failure.returncode,accepted=True))
 (out/'report.json').write_text(json.dumps(rows,indent=2)+'\n')
-print('unchanged full fixture native runtime PASS',flush=True)
+print('unchanged full fixture native selection/provenance PASS',flush=True)
 for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conflict','compiler-wrong-binary','launcher-wrong-binary']:
  if name=='alias-retargeted':alias.unlink();alias.symlink_to(sdks['java17']['home'])
  case=out/name;case.mkdir();project=case/'project';epoch.fixture(project,profile,sdks);build=project/'build.gradle';text=build.read_text()
