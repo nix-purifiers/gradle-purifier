@@ -205,6 +205,10 @@ jobs:
           nix build --inputs-from . 'nixpkgs#jdk8_headless' 'nixpkgs#jdk17_headless' 'nixpkgs#jdk21_headless' --no-link
           nix build 'github:nix-purifiers/gradle-purifier/f7ec9a358e25567231b58100d196c40557a6d638#default' \
             --out-link "$RUNNER_TEMP/gradle-sdk-baseline"
+          # Preserve genuine pre-caller-runtime SDK locks separately from the
+          # earlier manager-only baseline used for exact byte identity.
+          nix build 'github:nix-purifiers/gradle-purifier/6de49b91344c0413568da48f36f1b705f7582efc#default' \
+            --out-link "$RUNNER_TEMP/gradle-sdk-legacy-capture"
           python - <<'PYTHON'
           from pathlib import Path
           import os
@@ -225,6 +229,7 @@ jobs:
           python tests/sdk-closure/lifecycle.py \
             --cli "$RUNNER_TEMP/gradle-sdk-candidate/bin/gradle-purifier" \
             --baseline-cli "$RUNNER_TEMP/gradle-sdk-baseline/bin/gradle-purifier" \
+            --legacy-capture-cli "$RUNNER_TEMP/gradle-sdk-legacy-capture/bin/gradle-purifier" \
             --sdk-receipt "$RUNNER_TEMP/gradle-sdk-proof/telemetry/context.json" \
             --output "$RUNNER_TEMP/gradle-sdk-proof/lifecycle"
       - name: Reject SDK identity, path, platform and stale role changes
