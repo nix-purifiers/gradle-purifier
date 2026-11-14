@@ -10,6 +10,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
+import signal
 from pathlib import Path
 import shutil
 import subprocess
@@ -35,6 +37,8 @@ def main():
     profile, sdks = context['profile'], context['sdks']
     assert (profile['gradle'], profile['managerRuntime'], profile['projectCompiler'], profile['projectRuntime']) == ('8.14.3', 'java21', 'java8', 'java8')
     source = json.loads(args.sdk_source.read_text())
+    assert source.get('type') == 'github' and re.fullmatch(r'[0-9a-f]{40}', source.get('rev', ''))
+    assert re.fullmatch(r'sha256-[A-Za-z0-9+/]{43}=', source.get('narHash', ''))
     spec = importlib.util.spec_from_file_location('epoch', ROOT / 'tests/epoch-probes/probe.py')
     epoch = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(epoch)
@@ -49,14 +53,30 @@ def main():
                JAVA_TOOL_OPTIONS='-Duser.home=' + str(home),
                GRADLE_OPTS='-XX:ActiveProcessorCount=2 -Dorg.gradle.workers.max=2')
     result = dict(profile=profile, source=source, sourceStatus=args.source_status,
-                  manifest=manifest, cli=str(args.cli.resolve()), stages=[])
+                  manifest=manifest, cli=str(args.cli.resolve()),
+                  cliSHA256=hashlib.sha256(args.cli.read_bytes()).hexdigest(),
+                  harnessSHA256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  sdkReceiptSHA256=hashlib.sha256(args.sdk_receipt.read_bytes()).hexdigest(),
+                  sdkSourceSHA256=hashlib.sha256(args.sdk_source.read_bytes()).hexdigest(), stages=[])
 
     def run(name, command, cwd=project):
         command = list(map(str, command))
         with (out / (name + '.log')).open('w') as log:
-            process = subprocess.run(command, cwd=cwd, env=env, stdout=log,
-                                     stderr=subprocess.STDOUT, timeout=900)
-        result['stages'].append(dict(name=name, argv=command, cwd=str(cwd), exit=process.returncode))
+            process = subprocess.Popen(command, cwd=cwd, env=env, stdout=log,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
+            timed_out = False
+            try:
+                process.wait(timeout=900)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+        result['stages'].append(dict(name=name, argv=command, cwd=str(cwd), exit=process.returncode,
+                                    timedOut=timed_out, logSHA256=hashlib.sha256((out / (name + '.log')).read_bytes()).hexdigest()))
         (out / 'proof.json').write_text(json.dumps(result, indent=2) + '\n')
         assert process.returncode == 0, (name, (out / (name + '.log')).read_text()[-5000:])
         print(name, 'PASS', flush=True)
@@ -71,9 +91,11 @@ def main():
     assert {r['task'] for r in roles} == {':compileJava', ':compileTestJava', ':epochTest'}
     assert all(next(s['home'] for s in captured['sdks'] if s['identityHash'] == r['sdk']) == sdks['java8']['home'] for r in roles)
     observations = json.loads((project / '.gradle-purifier/lock-run/output/task-sdk-observations.json').read_text())
-    assert observations[':compileJava']['executed'] and observations[':epochTest']['executed']
+    assert all(observations[task]['executed'] and not observations[task]['failed']
+               and not observations[task]['skipped'] for task in [':compileJava', ':epochTest'])
     assert 'EPOCH TEST PASSED' in (out / 'bound-capture.log').read_text()
     (out / 'task-sdks.json').write_bytes((project / '.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
+    result['taskSDKReceiptSHA256'] = hashlib.sha256((out / 'task-sdks.json').read_bytes()).hexdigest()
     run('bound-relock', [args.cli, 'lock', '--bind-sdks', '--relock'])
     assert lock.read_bytes() == first
     run('prefetch', [args.cli, 'prefetch'])
