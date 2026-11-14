@@ -33,12 +33,12 @@ def fixture_jvm(cli, major, root):
 
 
 
-def bind_fixture_sdks(project, manager_major, majors, cli, expected_sdks):
+def bind_fixture_sdks(project, manager_major, majors, cli, expected_sdks, source=None):
     """Opt a strict Linux SDK fixture into the existing source declaration API."""
-    source = dict(type='github', owner='nix-purifiers', repo='purifier',
+    source = source or dict(type='github', owner='nix-purifiers', repo='purifier',
                   rev='f444063c705056a605583bd273cc8147f57808ee',
                   narHash='sha256-NaeaVq9B520WgzmRSMLGdN2zqnFlvM/wfZ8hECHhYqY=')
-    assert manager_major in (8, 11, 17), 'fixture needs an existing immutable manager adapter'
+    assert manager_major in (8, 11, 17, 21), 'fixture needs an existing immutable manager adapter'
     declaration = dict(version=1, system='x86_64-linux', manager=f'java{manager_major}', sdks=[
         dict(id=f'java{major}', source=source, selectionKind='jvm-sdk-adapter-v1',
              attribute=['lib', 'jvmSdkAdapters', 'x86_64-linux', f'openjdk{major}'])
