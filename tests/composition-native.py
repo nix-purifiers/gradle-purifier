@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory(prefix='gradle-native-composition-') as tempora
             source.write_text(source.read_text().replace('org.apache.commons.lang3.StringUtils',
                 'org.apache.commons.text.WordUtils').replace('StringUtils.capitalize', 'WordUtils.capitalizeFully'))
         reference = args.maven_producer or ('path:' + snapshot + '#checks.' + system + '.composition.producer')
-        env = dict(os.environ, GRADLE_USER_HOME=str(temporary / 'native-home'))
+        env = dict(os.environ, JAVA_HOME=str(tools / 'jdk'), GRADLE_USER_HOME=str(temporary / 'native-home'))
         def run(*arguments, cwd=project, environment=env):
             subprocess.run([str(value) for value in arguments], cwd=cwd, env=environment, check=True)
         gradle = project / '.gradle-purifier/distribution/bin/gradle'
