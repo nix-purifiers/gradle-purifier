@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Real Nix explicit-port repository replay and ordinary transitive consumers."""
 from pathlib import Path
-import argparse, functools, hashlib, http.server, importlib.util, json, os, shutil, subprocess, sys, threading
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
+import argparse, functools, hashlib, http.server, importlib.util, json, os, shutil, subprocess, threading
 sys.dont_write_bytecode=True
 p=argparse.ArgumentParser()
 for k in ['cli','sdks','cache','maven','output']:p.add_argument('--'+k,type=Path,required=True)
@@ -28,20 +32,20 @@ publishing.publications.proof.pom {
 '''%url
 sourceHashes={}
 def fixture(name):
- project=out/name;epoch.fixture(project,profile,sdk);f=project/'build.gradle';f.write_text(f.read_text()+extra);(project/'src/main/java/example/Epoch.java').write_text('package example; public final class Epoch { public static int answer(){return fixture.Helper.value()+1;} }');sourceHashes[name]={str(x.relative_to(project)):hashlib.sha256(x.read_bytes()).hexdigest() for x in project.rglob('*') if x.is_file()};return project
+ project=out/name;epoch.fixture(project,profile,sdk);bind_fixture_sdks(project, 21, [8], cli, sdk);f=project/'build.gradle';f.write_text(f.read_text()+extra);(project/'src/main/java/example/Epoch.java').write_text('package example; public final class Epoch { public static int answer(){return fixture.Helper.value()+1;} }');sourceHashes[name]={str(x.relative_to(project)):hashlib.sha256(x.read_bytes()).hexdigest() for x in project.rglob('*') if x.is_file()};return project
 try:
  native=fixture('native');run('native',['bash',gradle,'--no-daemon','clean','check','publish'],native)
- capture=fixture('capture');run('capture',[cli,'lock'],capture);lock=(capture/'gradle-purifier.lock.json').read_bytes();(out/'captured-lock.json').write_bytes(lock)
+ capture=fixture('capture');run('capture',[cli,'lock','--bind-sdks'],capture);lock=(capture/'gradle-purifier.lock.json').read_bytes();(out/'captured-lock.json').write_bytes(lock)
  for name in ['withXml-count']:assert (capture/'.gradle-purifier/lock-run/build/build'/name).read_text()=='1'
- run('relock',[cli,'lock','--relock'],capture);assert (capture/'gradle-purifier.lock.json').read_bytes()==lock
- cold=fixture('cold');(cold/'gradle-purifier.lock.json').write_bytes(lock);home=out/'cold-home';home.mkdir();coldenv=dict(HOME=str(home),GRADLE_USER_HOME=str(out/'cold-gradle-home'),XDG_CACHE_HOME=str(home/'cache'));run('cold-relocated-relock',[cli,'lock','--relock'],cold,coldenv);assert (cold/'gradle-purifier.lock.json').read_bytes()==lock
+ run('relock',[cli,'lock','--bind-sdks','--relock'],capture);assert (capture/'gradle-purifier.lock.json').read_bytes()==lock
+ cold=fixture('cold');(cold/'gradle-purifier.lock.json').write_bytes(lock);home=out/'cold-home';home.mkdir();coldenv=dict(HOME=str(home),GRADLE_USER_HOME=str(out/'cold-gradle-home'),XDG_CACHE_HOME=str(home/'cache'));run('cold-relocated-relock',[cli,'lock','--bind-sdks','--relock'],cold,coldenv);assert (cold/'gradle-purifier.lock.json').read_bytes()==lock
  run('prefetch',[cli,'prefetch'],cold,coldenv);assert not (Path(coldenv['GRADLE_USER_HOME'])/'caches').exists() and not (cold/'build').exists()
  server.shutdown();server.server_close();(out/'server-stopped.json').write_text(json.dumps({'url':url,'stoppedBefore':'cold namespace replay/Nix builds/publish/consumers','relockUsesNativeNetworkResolution':True}))
  classpath=out/'classpath.init.gradle';classpath.write_text("allprojects { p -> p.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).all { t -> t.doFirst { def output=new File(System.getenv('ACTUAL_CLASSPATHS'));def rows=output.isFile()?new groovy.json.JsonSlurper().parse(output):[:];rows[t.path]=t.classpath.files*.absolutePath;output.text=groovy.json.JsonOutput.toJson(rows) } } }")
  run('cold-network-namespace-check',[shutil.which('unshare'),'-rn','sh','-c','ip link set lo up && exec "$@"','legacy-metadata','bash',cold/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','--init-script',classpath,'clean','check'],cold,dict(coldenv,ACTUAL_CLASSPATHS=str(out/'cold-classpaths.json')))
  paths=json.loads((out/'cold-classpaths.json').read_text());assert any('.gradle-purifier-replay-v1' in x for x in paths[':compileJava']);assert all(':' not in x for x in paths[':compileJava']);shutil.copyfile(cold/'build/tmp/compileJava/java-compiler-args.txt',out/'cold-javac-args.txt')
- expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SOURCE");p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_PROJECT";}).ATTR''';nixenv=dict(coldenv,LEGACY_SOURCE=str(root),LEGACY_PROJECT=str(cold));run('sandbox-tests',['nix','build','--impure','--no-link','--print-build-logs','--expr',expression.replace('ATTR','tests')],cold,nixenv);release=Path(run('nix-release',['nix','build','--impure','--no-link','--print-out-paths','--expr',expression.replace('ATTR','release')],cold,nixenv).strip().splitlines()[-1]);nixrepo=release/'epoch';relative=Path('example/epoch/1.0');nativepom=native/'repository'/relative/'epoch-1.0.pom';nixpom=nixrepo/relative/'epoch-1.0.pom';assert nativepom.read_bytes()==nixpom.read_bytes()
- projection=Path(run('nix-publication-projection',['nix','build','--impure','--no-link','--print-out-paths','--expr',expression.replace('ATTR','publication')],cold,nixenv).strip().splitlines()[-1]);catalog=json.loads((projection/'catalog.json').read_text());module=next(m for m in catalog['modules'] if m['group']=='example' and m['name']=='epoch');version=module['version'];relative=Path('example/epoch')/version;nixrepo=projection/'repository';prefix='epoch-'+version
+ expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SOURCE");p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_PROJECT";}).ATTR''';nixenv=dict(coldenv,LEGACY_SOURCE=str(root),LEGACY_PROJECT=str(cold));run('sandbox-tests',fixture_build(cli,cold,'tests'),cold,nixenv);release=Path(run('nix-release',fixture_build(cli,cold,'release'),cold,nixenv).strip().splitlines()[-1]);nixrepo=release/'epoch';relative=Path('example/epoch/1.0');nativepom=native/'repository'/relative/'epoch-1.0.pom';nixpom=nixrepo/relative/'epoch-1.0.pom';assert nativepom.read_bytes()==nixpom.read_bytes()
+ projection=Path(run('nix-publication-projection',fixture_build(cli,cold,'publication'),cold,nixenv).strip().splitlines()[-1]);catalog=json.loads((projection/'catalog.json').read_text());module=next(m for m in catalog['modules'] if m['group']=='example' and m['name']=='epoch');version=module['version'];relative=Path('example/epoch')/version;nixrepo=projection/'repository';prefix='epoch-'+version
  shutil.rmtree(cold/'build');guard=out/'sentinel.init.gradle';guard.write_text("gradle.projectsEvaluated { gradle.rootProject.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).all { doFirst { throw new GradleException('NATIVE_COMPILATION_DURING_LEGACY_PUBLISH') } } };gradle.taskGraph.whenReady { graph -> new File(System.getenv('PUBLISH_GRAPH')).text=groovy.json.JsonOutput.toJson(graph.allTasks*.path) }")
  run('publish-original-task',[cli,'publish','publishProofPublicationToMavenRepository','--init-script',guard],cold,dict(coldenv,PUBLISH_GRAPH=str(out/'publish-graph.json')));assert not any('compileJava' in task or 'jar' == task.rsplit(':',1)[-1] for task in json.loads((out/'publish-graph.json').read_text()));assert not (cold/'build/classes').exists()
  for name in ['withXml-count']:assert not (cold/'build'/name).exists()
