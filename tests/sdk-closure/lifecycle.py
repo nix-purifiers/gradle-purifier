@@ -19,6 +19,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cli',type=Path,required=True)
     parser.add_argument('--baseline-cli',type=Path,required=True)
+    parser.add_argument('--legacy-capture-cli',type=Path,required=True,help='immutable pre-caller-runtime CLI that genuinely captures legacy-v1 SDK roles')
     parser.add_argument('--sdk-receipt',type=Path,required=True,help='context.json from sdk-telemetry/probe.py')
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
@@ -32,7 +33,7 @@ def main():
     env['PATH']=env['JAVA_HOME']+'/bin:'+env['PATH']
     result=dict(scope='Existing 8.14.3 authentic legacy-v1 split21/8 replay, plain caller-runtime capture and same21 byte control; explicit source-v2 split21/8 binding remains a separate outstanding lane',stages=[])
     (out/'context.json').write_text(json.dumps(dict(cli=str(args.cli.resolve()),baselineCli=str(args.baseline_cli.resolve()),
-        sdkReceipt=sdk_context,sourceHashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in [
+        sdkReceipt=sdk_context,legacyCaptureCli=str(args.legacy_capture_cli.resolve()),sourceHashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in [
             'src/gradle-purifier.sh','pkgs/build-gradle-project/task-jdks.init.gradle','pkgs/build-gradle-project/capture-project-jdks.py',
             'pkgs/build-gradle-project/capture-project-jdk.nix','pkgs/build-gradle-project/project-jdks.nix','lib-overlays/default/read-lock.nix',
             'pkgs/build-gradle-project/default.nix','pkgs/build-gradle-project/user.init.gradle','pkgs/default.nix',
@@ -63,14 +64,14 @@ def main():
         locked=json.loads((project/'gradle-purifier.lock.json').read_text())
         assert json.loads(rebound.read_text())==locked.get('projectJdks',{})
         result[label+'UpToDateSelectionStable']=True
-    cli=args.cli.resolve();baseline=args.baseline_cli.resolve()
+    cli=args.cli.resolve();baseline=args.baseline_cli.resolve();legacy=args.legacy_capture_cli.resolve()
     project=out/'split';epoch.fixture(project,profile,sdks)
     originals={str(p.relative_to(project)):p.read_bytes() for p in project.rglob('*') if p.is_file()}
-    run('split-v1-baseline-capture',[baseline,'lock'],project)
+    run('split-v1-baseline-capture',[legacy,'lock'],project)
     (out/'split-selected-sdk.json').write_bytes((project/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
     lock_path=project/'gradle-purifier.lock.json';first=lock_path.read_bytes()
     locked=json.loads(first);assert 'projectJdks' in locked
-    run('split-v1-baseline-relock',[baseline,'lock','--relock'],project);assert lock_path.read_bytes()==first
+    run('split-v1-baseline-relock',[legacy,'lock','--relock'],project);assert lock_path.read_bytes()==first
     # Current ordinary capture deliberately records dependency resolution only.
     caller=out/'split-caller-runtime';epoch.fixture(caller,profile,sdks)
     run('split-caller-runtime-capture',[cli,'lock'],caller)
