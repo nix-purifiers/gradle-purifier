@@ -29,7 +29,8 @@ for name,attr,extra in [('pure-tests','tests',[]),('pure-release','release',[]),
 for attr in ['projections.maven','packages.epoch.projections.maven']:run('reject-'+attr,fixture_build(cli,P,attr),bad='Gradle5.6.4 strict legacy Maven projection')
 run('reject-publish',[cli,'publish','uploadArchives'],bad='Gradle5.6.4 strict legacy Maven publish')
 if not a.sdk:
- init=O/'enable-test.init.gradle';init.write_text("gradle.projectsEvaluated { gradle.rootProject.tasks.getByName('test').enabled=true }\n");run('reject-enabling-disabled-test',['unshare','-rn','sh','-c','ip link set lo up && exec "$@"','legacy56-enable',P/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','--init-script',init,'test'],cold,bad='cannot resolve SDK role for :test')
+ validation_context=Path(run('sdk-validation-context',fixture_build(cli,P,'sdkContext')).strip().splitlines()[-1])
+ init=O/'enable-test.init.gradle';init.write_text("gradle.projectsEvaluated { gradle.rootProject.tasks.getByName('test').enabled=true }\n");run('reject-enabling-disabled-test',['unshare','-rn','sh','-c','ip link set lo up && exec "$@"','legacy56-enable',P/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','-Dgradle.purifier.mode=interactive','--init-script',Path(values['lib'])/'task-jdks.init.gradle','--init-script',init,'test'],dict(cold,GRADLE_PURIFIER_JDK_CONTEXT=str(validation_context)),bad='cannot resolve SDK role for :test')
 assert all(hashlib.sha256((P/n).read_bytes()).hexdigest()==h for n,h in source.items());markers=['EPOCH TEST PASSED']+(['NATIVE_JUNIT_JAVA8_EXECUTED','NATIVE_JAVADOC_JAVA8_EXECUTED'] if a.sdk else [])
 for name in ['native-check-upload','capture','cold-offline','pure-tests','rebuild-tests']:assert all(m in (O/(name+'.log')).read_text() for m in markers)
 # Preserve the actual native and Nix outputs so CI artifacts can verify parity.
