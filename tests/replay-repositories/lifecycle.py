@@ -9,7 +9,8 @@ import argparse, functools, hashlib, http.server, importlib.util, json, os, shut
 sys.dont_write_bytecode=True
 p=argparse.ArgumentParser()
 for k in ['cli','sdks','cache','maven','output']:p.add_argument('--'+k,type=Path,required=True)
-a=p.parse_args();root=Path(__file__).resolve().parents[2];source_snapshot={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=root,text=True).splitlines() if (root/p).is_file()};out=a.output.resolve();out.mkdir();sdk=json.loads(a.sdks.read_text());cli=a.cli.resolve();maven=a.maven.resolve();rows=[];env=dict(os.environ,JAVA_HOME=sdk['java21']['home'],HOME=str(out/'home'),GRADLE_USER_HOME=str(out/'gradle-home'));Path(env['HOME']).mkdir()
+a=p.parse_args();root=Path(__file__).resolve().parents[2];source_snapshot={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=root,text=True).splitlines() if (root/p).is_file()};out=a.output.resolve();out.mkdir();sdk=json.loads(a.sdks.read_text());cli=a.cli.resolve();maven=a.maven.resolve();rows=[];env=dict(os.environ,JAVA_HOME=sdk['java17']['home'],HOME=str(out/'home'),GRADLE_USER_HOME=str(out/'gradle-home'));Path(env['HOME']).mkdir()
+# The pinned SDK adapters cover Java 8, 11 and 17, so the Gradle manager runs on 17.
 spec=importlib.util.spec_from_file_location('epoch',root/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch);profile=next(x for x in json.loads((root/'tests/epoch-probes/profiles.json').read_text())['profiles'] if x['id']=='gradle-8.14.3');gradle=epoch.distribution(profile,a.cache.resolve());j8=Path(sdk['java8']['home'])
 def run(name,cmd,cwd=out,extra=None):
  cmd=list(map(str,cmd))
@@ -32,7 +33,7 @@ publishing.publications.proof.pom {
 '''%url
 sourceHashes={}
 def fixture(name):
- project=out/name;epoch.fixture(project,profile,sdk);bind_fixture_sdks(project, 21, [8], cli, sdk);f=project/'build.gradle';f.write_text(f.read_text()+extra);(project/'src/main/java/example/Epoch.java').write_text('package example; public final class Epoch { public static int answer(){return fixture.Helper.value()+1;} }');sourceHashes[name]={str(x.relative_to(project)):hashlib.sha256(x.read_bytes()).hexdigest() for x in project.rglob('*') if x.is_file()};return project
+ project=out/name;epoch.fixture(project,profile,sdk);bind_fixture_sdks(project, 17, [8], cli, sdk);f=project/'build.gradle';f.write_text(f.read_text()+extra);(project/'src/main/java/example/Epoch.java').write_text('package example; public final class Epoch { public static int answer(){return fixture.Helper.value()+1;} }');sourceHashes[name]={str(x.relative_to(project)):hashlib.sha256(x.read_bytes()).hexdigest() for x in project.rglob('*') if x.is_file()};return project
 try:
  native=fixture('native');run('native',['bash',gradle,'--no-daemon','clean','check','publish'],native)
  capture=fixture('capture');run('capture',[cli,'lock','--bind-sdks'],capture);lock=(capture/'gradle-purifier.lock.json').read_bytes();(out/'captured-lock.json').write_bytes(lock)

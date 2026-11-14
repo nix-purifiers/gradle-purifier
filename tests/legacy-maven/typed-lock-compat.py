@@ -10,6 +10,9 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
 parser = argparse.ArgumentParser()
 for key in ("cli", "baseline-cli", "sdks", "output"):
     parser.add_argument("--" + key, type=Path, required=True)
@@ -60,10 +63,12 @@ assert not (release / "epoch/nix-support/legacy-native-metadata.json").exists()
 run("old-typed-native-publish", [cli, "publish", "uploadArchives"])
 assert lockfile.read_bytes() == original and not list((project / "repository").rglob("*.module"))
 shutil.rmtree(project / "repository")
-run("explicit-relock-upgrade", [cli, "lock", "--relock"])
+# The explicit upgrade also opts the strict fixture into declared SDK binding.
+bind_fixture_sdks(project, 11, [8], cli, sdk)
+run("explicit-relock-upgrade", [cli, "lock", "--bind-sdks", "--relock"])
 upgraded = json.loads(lockfile.read_text())
 assert upgraded["projects"][0]["publications"][0]["nativeMetadata"] == dict(kind="gradle-java-component", version=1)
-run("upgraded-pure-tests", command + ["-A", "tests"])
-projection = Path(run("upgraded-strict-projection", command + ["-A", "publication"]).strip().splitlines()[-1])
+run("upgraded-pure-tests", fixture_build(cli, project, "tests"))
+projection = Path(run("upgraded-strict-projection", fixture_build(cli, project, "publication")).strip().splitlines()[-1])
 assert list((projection / "repository/example/epoch").rglob("*.module"))
 print("REAL_OLD_TYPED_REPLAY_AND_EXPLICIT_NATIVE_METADATA_MIGRATION_PASS", flush=True)
