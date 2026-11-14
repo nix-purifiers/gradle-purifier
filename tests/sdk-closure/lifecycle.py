@@ -33,7 +33,7 @@ def main():
     home=out/'home';home.mkdir()
     env=dict(os.environ,JAVA_HOME=sdks['java21']['home'],HOME=str(home),GRADLE_USER_HOME=str(home/'.gradle'))
     env['PATH']=env['JAVA_HOME']+'/bin:'+env['PATH']
-    result=dict(scope='Existing 8.14.3 authentic legacy-v1 split21/8 replay, plain caller-runtime capture and same21 byte control; explicit source-v2 split21/8 binding remains a separate outstanding lane',stages=[])
+    result=dict(scope='Existing 8.14.3 authentic legacy-v1 split21/8 replay, plain caller-runtime capture and same21 byte control; explicit source-v2 split21/8 binding is measured by a separate parameterized proof',stages=[])
     (out/'context.json').write_text(json.dumps(dict(cli=str(args.cli.resolve()),baselineCli=str(args.baseline_cli.resolve()),
         sdkReceipt=sdk_context,legacyCaptureCli=str(args.legacy_capture_cli.resolve()),sourceHashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in [
             'src/gradle-purifier.sh','pkgs/build-gradle-project/task-jdks.init.gradle','pkgs/build-gradle-project/capture-project-jdks.py',
@@ -152,7 +152,7 @@ def main():
     assert lock_path.read_bytes()==first, 'candidate replay changed the authentic v1 lock'
     result.update(legacyV1BaselineRelockByteIdentical=True,legacyV1CandidateReplayLockUnchanged=True,
                   sameBaselineColdWarmByteIdentical=True,sourcePreserved=True,
-                  sourceV2Strict21And8Binding='outstanding: requires genuine published manager21 adapter source')
+                  sourceV2Strict21And8Binding='separate parameterized source-binding.py proof; not asserted by this legacy compatibility harness')
     (out/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
 
 
