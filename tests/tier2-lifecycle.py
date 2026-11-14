@@ -89,7 +89,7 @@ def main():
         receipt['harnessSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         receipt['evidenceFiles'] = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in (Path(__file__), root / 'tests/tier2-offline.nix',
-                         root / 'tests/tier2-diagnostics.py',
+                         root / 'tests/tier2-diagnostics.py', root / 'tests/fixture_jvm.py',
                          root / 'tests/GradleSocketProbe.java',
                          root / '.github/workflows/tier2-runtime.yml')}
         receipt['sample'] = json.loads((root / 'tests/real-world/petclinic.json').read_text())
@@ -144,8 +144,10 @@ def main():
             for directory in ('build', '.gradle', '.gradle-purifier'):
                 shutil.rmtree(project / directory, ignore_errors=True)
             run('prefetch', [cli, 'prefetch'], project)
-            jdk = (project / '.gradle-purifier/jdk').resolve()
-            java_home = jdk / 'lib/openjdk' if (jdk / 'lib/openjdk').is_dir() else jdk
+            from fixture_jvm import fixture_jvm
+            selected = fixture_jvm(cli, 17, work / 'fixture-jvm')
+            jdk = Path(selected['package'])
+            java_home = Path(selected['home'])
             receipt['javaHome'] = str(java_home)
             run('java', [java_home / 'bin/java', '-version'])
             # The executable ordinary-workflow check uses precisely the files
