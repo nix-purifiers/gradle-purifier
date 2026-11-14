@@ -13,6 +13,9 @@ import sys
 import zipfile
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT/'tests'))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
 parser=argparse.ArgumentParser(description=__doc__)
 for name in ['cli','cache','sdks','output']:parser.add_argument('--'+name,type=Path,required=True)
 args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
@@ -20,7 +23,7 @@ sdks=json.loads(args.sdks.read_text());cli=args.cli.resolve()
 spec=importlib.util.spec_from_file_location('epoch',ROOT/'tests/epoch-probes/probe.py');epoch=importlib.util.module_from_spec(spec);spec.loader.exec_module(epoch)
 profile=next(p for p in json.loads((ROOT/'tests/epoch-probes/profiles.json').read_text())['profiles'] if p['id']=='gradle-7.6.6')
 args.cache=args.cache.resolve();args.cache.mkdir(parents=True,exist_ok=True);gradle=epoch.distribution(profile,args.cache)
-context=dict(scope='One existing fixture/profile only; skipped Test supplies selection, not runtime execution credit',profile=profile,sdks=sdks,
+context=dict(scope='One existing source-bound17/8 fixture/profile; legacy disabled-Test selection is checked separately by explicit-native.py, not credited as runtime execution',profile=profile,sdks=sdks,
  sourceRevision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),cli=str(cli),
  sourceHashes={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=ROOT,text=True).splitlines() if (ROOT/p).is_file()})
 (out/'context.json').write_text(json.dumps(context,indent=2)+'\n');stages=[]
@@ -39,16 +42,16 @@ def consumer(label,jar):
 native=out/'native';epoch.fixture(native,profile,sdks)
 run('native-build-check-publish',['bash',gradle,'--no-daemon','clean','check','publish'],native)
 native_jar=native/'repository/example/epoch/1.0/epoch-1.0.jar';assert class_major(native_jar)==52;consumer('native-consumer',native_jar)
-project=out/'capture';epoch.fixture(project,profile,sdks);originals={str(p.relative_to(project)):p.read_bytes() for p in project.rglob('*') if p.is_file()}
-run('capture',[cli,'lock'],project);lock=project/'gradle-purifier.lock.json';first=lock.read_bytes();data=json.loads(first);sdk_context=data['projectJdks']['x86_64-linux'];test_role=next(r for r in sdk_context['roles'] if r['task']==':test');assert test_role['provenance']=='native-effective-fork-options';assert next(s for s in sdk_context['sdks'] if s['identityHash']==test_role['sdk'])['home']==sdks['java17']['home']
-observations=json.loads((project/'.gradle-purifier/lock-run/output/task-sdk-observations.json').read_text());assert observations[':epochTest']['executed'] and not observations[':epochTest']['skipped'] and not observations[':epochTest']['failed'];assert observations[':test']['skipped']
+project=out/'capture';epoch.fixture(project,profile,sdks);bind_fixture_sdks(project,17,[8],cli,sdks);originals={str(p.relative_to(project)):p.read_bytes() for p in project.rglob('*') if p.is_file()}
+run('capture',[cli,'lock','--bind-sdks'],project);lock=project/'gradle-purifier.lock.json';first=lock.read_bytes();data=json.loads(first);sdk_context=data['projectJdks']['x86_64-linux'];assert sdk_context['version']=='jvm-sdk-context-v2';assert not any(r['task']==':test' for r in sdk_context['roles'])
+observations=json.loads((project/'.gradle-purifier/lock-run/output/task-sdk-observations.json').read_text());assert observations[':epochTest']['executed'] and not observations[':epochTest']['skipped'] and not observations[':epochTest']['failed'];assert ':test' not in observations and ':test SKIPPED' in (out/'capture.log').read_text()
 (out/'captured-lock.json').write_bytes(first)
 (out/'task-sdks.json').write_bytes((project/'.gradle-purifier/lock-run/output/task-sdks.json').read_bytes())
 (out/'task-sdk-observations.json').write_text(json.dumps(observations,indent=2)+'\n')
-run('relock',[cli,'lock','--relock'],project);assert lock.read_bytes()==first
-cold=out/'cold';epoch.fixture(cold,profile,sdks);(cold/'gradle-purifier.lock.json').write_bytes(first)
+run('relock',[cli,'lock','--bind-sdks','--relock'],project);assert lock.read_bytes()==first
+cold=out/'cold';epoch.fixture(cold,profile,sdks);bind_fixture_sdks(cold,17,[8],cli,sdks);(cold/'gradle-purifier.lock.json').write_bytes(first)
 cold_home=out/'cold-home';cold_home.mkdir();cold_env=dict(HOME=str(cold_home),GRADLE_USER_HOME=str(out/'cold-gradle-home'),XDG_CACHE_HOME=str(cold_home/'cache'))
-run('cold-relocated-relock',[cli,'lock','--relock'],cold,cold_env);assert (cold/'gradle-purifier.lock.json').read_bytes()==first
+run('cold-relocated-relock',[cli,'lock','--bind-sdks','--relock'],cold,cold_env);assert (cold/'gradle-purifier.lock.json').read_bytes()==first
 run('cold-prefetch',[cli,'prefetch'],cold,cold_env)
 assert not (Path(cold_env['GRADLE_USER_HOME'])/'caches').exists(),'native Gradle cache was warm before the cold offline control'
 assert not (cold/'build').exists(),'project outputs were warm before the cold offline control'
@@ -59,7 +62,7 @@ assert 'EPOCH TEST PASSED' in (out/'cold-network-namespace-build-check.log').rea
 expression='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SDK_SOURCE");
  p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};
  in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_SDK_PROJECT";}).tests'''
-run('sandbox-tests',['nix','build','--impure','--no-link','--print-build-logs','--expr',expression],cold,dict(cold_env,LEGACY_SDK_SOURCE=str(ROOT),LEGACY_SDK_PROJECT=str(cold)))
+run('sandbox-tests',fixture_build(cli,cold,'tests'),cold,dict(cold_env,LEGACY_SDK_SOURCE=str(ROOT),LEGACY_SDK_PROJECT=str(cold)))
 run('publish',[cli,'publish','publishProofPublicationToMavenRepository'],cold,cold_env)
 jars=list((cold/'repository/example/epoch').glob('*/*-nix-*.jar'));assert len(jars)==1,jars;jar=jars[0];assert class_major(jar)==52;consumer('purified-consumer',jar)
 with zipfile.ZipFile(native_jar) as a,zipfile.ZipFile(jar) as b:assert a.read('example/Epoch.class')==b.read('example/Epoch.class')

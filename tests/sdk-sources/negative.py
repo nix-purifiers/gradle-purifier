@@ -86,14 +86,14 @@ for file in project.rglob('*'):
         try: text = file.read_text()
         except UnicodeError: continue
         file.write_text(text.replace(sdk8,other['home']))
-run('foreign-task-sdk',[cli,'lock','--relock'],project,False,'absent from the exact project declaration')
+run('foreign-task-sdk',[cli,'lock','--bind-sdks','--relock'],project,False,'absent from the exact project declaration')
 before_actions(project)
 project = clone('foreign-manager')
 manager8 = copy.deepcopy(declaration)
 manager8['manager'] = 'compiler'
 (project/'gradle-purifier.sdks.json').write_text(json.dumps(manager8,indent=2)+'\n')
 with (project/'gradle.properties').open('a') as f: f.write('org.gradle.java.home='+other['home']+'\n')
-run('foreign-manager',[cli,'lock','--relock'],project,False,'actual Gradle manager differs')
+run('foreign-manager',[cli,'lock','--bind-sdks','--relock'],project,False,'actual Gradle manager differs')
 before_actions(project)
 project = clone('explicit-alternate')
 for file in project.rglob('*'):
@@ -102,7 +102,7 @@ for file in project.rglob('*'):
         except UnicodeError: continue
         file.write_text(text.replace(sdk8,other['home']))
 (project/'gradle-purifier.sdks.json').write_bytes((out/'alternate-declaration.json').read_bytes())
-run('explicit-alternate',[cli,'lock','--relock'],project)
+run('explicit-alternate',[cli,'lock','--bind-sdks','--relock'],project)
 accepted = json.loads((project/'gradle-purifier.lock.json').read_text())['projectJdks']['x86_64-linux']
 assert all(role['sdk'] == other['identityHash'] for role in accepted['roles'])
 assert len(accepted['sdks']) == 3
@@ -110,32 +110,48 @@ assert len(accepted['sdks']) == 3
 project = clone('stale-declaration')
 with (project/'gradle-purifier.sdks.json').open('a') as f: f.write('\n')
 run('stale-declaration',[cli,'prefetch'],project,False,'changed since')
-# A disabled Test has no role; enabling it later cannot borrow another SDK role.
+# Native Gradle may enable a previously disabled Test; strict sandbox replay
+# must still reject a role absent from its explicit SDK binding.
 project = clone('disabled-test')
 with (project/'build.gradle').open('a') as f: f.write("\ntest.enabled=project.hasProperty('enableLockedTest')\n")
-run('disabled-test-capture',[cli,'lock','--relock'],project)
+run('disabled-test-capture',[cli,'lock','--bind-sdks','--relock'],project)
 disabled = json.loads((project/'gradle-purifier.lock.json').read_text())['projectJdks']['x86_64-linux']
 assert not any(role['task'] == ':test' for role in disabled['roles'])
 disabled_env = dict(GRADLE_USER_HOME=str(out/'disabled-gradle-home'))
 run('disabled-test-prefetch',[cli,'prefetch'],project,extra=disabled_env)
 namespace = ['unshare','-rn','sh','-c','ip link set lo up && exec "$@"','source-sdk-negative']
-run('disabled-test-enabled',[*namespace,'bash',project/'.gradle-purifier/distribution/bin/gradle',
-    '--offline','--no-daemon','-PenableLockedTest','check'],project,False,'was not selected by the lock',disabled_env)
-assert not (project/'test-started').exists()
+run('disabled-test-native-enabled',[*namespace,'bash',project/'.gradle-purifier/distribution/bin/gradle',
+    '--offline','--no-daemon','-PenableLockedTest','check'],project,extra=disabled_env)
+assert (project/'test-started').exists()
+# Preserve the captured role set while explicitly exercising a different task
+# argument in the pure builder. Recompute only input/content integrity fields.
+strict_lock = json.loads((project/'gradle-purifier.lock.json').read_text())
+strict_lock['gradleArguments'] = ['-PenableLockedTest']
+strict_lock['inputsHash'] = run('enabled-inputs-hash',[sys.executable,helper,'hash',*common,
+    '--project',project,'--arguments',json.dumps(strict_lock['gradleArguments'])],project).strip().splitlines()[-1]
+strict_lock.pop('contentHash',None)
+strict_lock['contentHash'] = 'sha256:'+hashlib.sha256(json.dumps(strict_lock,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+strict_file = out/'enabled-strict-lock.json'
+strict_file.write_text(json.dumps(strict_lock,indent=2)+'\n')
+run('disabled-test-pure-enabled',[sys.executable,helper,'build',*common,
+    '--project',project,'--lock',strict_file,'--attribute','tests','--root',out/'enabled-strict-tests'],
+    project,False,'was not selected by the lock',
+    {'NIX_CONFIG': os.environ.get('NIX_CONFIG','')+'\nlog-lines = 1000\n'})
 # Capture may supply startup defaults. Ordinary commands require original native discovery.
 project = clone('missing-discovery')
 (project/'gradle.properties').unlink()
-run('missing-discovery-capture',[cli,'lock','--relock'],project)
+run('missing-discovery-capture',[cli,'lock','--bind-sdks','--relock'],project)
 missing_env = dict(GRADLE_USER_HOME=str(out/'missing-gradle-home'))
 run('missing-discovery-prefetch',[cli,'prefetch'],project,extra=missing_env)
 # Keep the unavailable-provider branch independent of SDKs installed on the host.
-run('missing-discovery-ordinary',[*namespace,'bash',project/'.gradle-purifier/distribution/bin/gradle',
+text = run('missing-discovery-ordinary',[*namespace,'bash',project/'.gradle-purifier/distribution/bin/gradle',
     '--offline','--no-daemon','-Porg.gradle.java.installations.auto-detect=false',
-    '-Porg.gradle.java.installations.auto-download=false','check'],project,False,
-    'project SDK discovery is unavailable',missing_env)
+    '-Porg.gradle.java.installations.auto-download=false','check'],project,False,extra=missing_env)
+assert 'toolchain' in text.lower() and 'gradle-purifier: project SDK discovery is unavailable' not in text
 assert not (project/'test-started').exists()
 (out/'result.json').write_text(json.dumps(dict(status='passed', exactJavaVersion=versions[0],
     differentSdkIdentities=True, foreignSdkRejectedBeforeActions=True,
     foreignSameVersionManagerRejectedBeforeActions=True, originalNativeSelectionPreserved=True,
-    disabledTestCannotBecomeEnabled=True, missingOrdinaryDiscoveryRejected=True,
+    nativeDisabledTestCanBecomeEnabled=True, pureUndeclaredRoleRejected=True,
+    missingOrdinaryDiscoveryRejectedByGradle=True,
     staleDeclarationRejected=True, stages=len(stages)),indent=2)+'\n')

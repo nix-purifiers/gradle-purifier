@@ -16,22 +16,24 @@ context=dict(scope='Native SDK selection controls; full lifecycle proof is recor
  sourceHashes={p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in subprocess.check_output(['git','ls-files'],cwd=repo,text=True).splitlines() if (repo/p).is_file()})
 (out/'context.json').write_text(json.dumps(context,indent=2)+'\n')
 alias=out/'mutable-sdk';alias.symlink_to(sdks['java8']['home']);rows=[]
-# The unchanged full fixture now records the native Test effective runtime.
+# Observe the unchanged full native fixture through the production callback.
+# This preserves legacy-v1 selection/forgery coverage without claiming that
+# ordinary dependency-only CLI capture still binds immutable SDKs.
 # Its disabled Test task still supplies selection, not runtime execution credit.
 full=out/'preserved-full-barrier';full.mkdir();epoch.fixture(full/'project',profile,sdks)
 full_env=dict(os.environ,JAVA_HOME=sdks['java17']['home'],GRADLE_USER_HOME=str(full/'gradle-home'),HOME=str(full/'home'))
 Path(full_env['HOME']).mkdir()
 with (full/'run.log').open('w') as log:
- failure=subprocess.run([str(cli),'lock'],cwd=full/'project',env=full_env,stdout=log,stderr=subprocess.STDOUT,timeout=180)
+ failure=subprocess.run(['bash',str(gradle),'--offline','--no-daemon','--init-script',str(lib/'task-jdks.init.gradle'),'clean','check'],cwd=full/'project',env=dict(full_env,GRADLE_PURIFIER_MODE='lock',GRADLE_PURIFIER_OUTPUT=str(full/'output')),stdout=log,stderr=subprocess.STDOUT,timeout=180)
 assert failure.returncode==0,(full/'run.log').read_text()[-4000:]
-full_lock=json.loads((full/'project/gradle-purifier.lock.json').read_text())
-full_context=full_lock['projectJdks']['x86_64-linux']
+full_receipt=json.loads((full/'output/task-sdks.json').read_text())
+full_context=capture.capture(full_receipt,descriptor,repo/'pkgs/build-gradle-project/capture-project-jdk.nix')['x86_64-linux']
 test_role=next(role for role in full_context['roles'] if role['task']==':test')
 assert test_role['provenance']=='native-effective-fork-options'
 assert next(sdk for sdk in full_context['sdks'] if sdk['identityHash']==test_role['sdk'])['home']==sdks['java17']['home']
-rows.append(dict(case='unchanged-full-fixture-native-test-runtime',exitCode=failure.returncode,accepted=True))
+rows.append(dict(case='unchanged-full-fixture-native-test-selection',exitCode=failure.returncode,accepted=True))
 (out/'report.json').write_text(json.dumps(rows,indent=2)+'\n')
-print('unchanged full fixture native runtime PASS',flush=True)
+print('unchanged full fixture native selection/provenance PASS',flush=True)
 for name in ['exact-immutable','alias-initial','alias-retargeted','provider-conflict','compiler-wrong-binary','launcher-wrong-binary']:
  if name=='alias-retargeted':alias.unlink();alias.symlink_to(sdks['java17']['home'])
  case=out/name;case.mkdir();project=case/'project';epoch.fixture(project,profile,sdks);build=project/'build.gradle';text=build.read_text()

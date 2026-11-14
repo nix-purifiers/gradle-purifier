@@ -163,6 +163,27 @@ let
     else
       src;
 
+  readableSdkDeclaration =
+    builtins.isPath src
+    || (
+      builtins.isString src
+      && lib.hasPrefix "${builtins.storeDir}/" src
+      && builtins.getContext src != { }
+      && lib.all (entry: !(entry ? outputs || entry ? allOutputs)) (
+        builtins.attrValues (builtins.getContext src)
+      )
+    );
+  unboundSdkDeclaration =
+    readableSdkDeclaration
+    && builtins.pathExists (src + "/gradle-purifier.sdks.json")
+    && !sourceSdkMode
+    && jdk == null;
+  pureExecution =
+    value:
+    assert
+      !unboundSdkDeclaration
+      || throw "gradle-purifier: the SDK declaration is not bound for a sandboxed build; explicitly run 'gradle-purifier lock --bind-sdks' or supply an immutable jdk. Local dependency prefetch and native builds do not require that binding.";
+    value;
   defaultJdk =
     javaPackages.compiler."openjdk${toString gradle.javaMajor}".headless
       or (throw "gradle-purifier: javaPackages has no openjdk${toString gradle.javaMajor} for the Java the lock was made with; pass `jdk`.");
@@ -178,6 +199,13 @@ let
         || throw "gradle-purifier: explicit SDK declarations cannot be mixed with direct JDK overrides";
       selectedProjectJdks.managerSdk
     else if jdk != null then
+      assert
+        (
+          builtins.getContext (toString jdk) != { }
+          && builtins.getContext (javaHome jdk) != { }
+          && lib.hasPrefix "${builtins.storeDir}/" (javaHome jdk)
+        )
+        || throw "gradle-purifier: a sandboxed jdk must carry immutable Nix package context; keep host JVMs on the local native workflow";
       jdk
     else
       defaultJdk;
@@ -722,12 +750,9 @@ let
   '';
 in
 {
-  projections = rootProjections;
-  inherit publication;
+  projections = pureExecution rootProjections;
+  publication = pureExecution publication;
   inherit
-    packages
-    tests
-    release
     lock
     repository
     distribution
@@ -736,7 +761,10 @@ in
     distributionProvenance
     konan
     ;
+  packages = pureExecution packages;
+  tests = pureExecution tests;
+  release = pureExecution release;
   fetches = lock.entries;
-  jdk = jdk';
-  inherit sdkContext;
+  jdk = pureExecution jdk';
+  sdkContext = pureExecution sdkContext;
 }
