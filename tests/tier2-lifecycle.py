@@ -149,6 +149,7 @@ def main():
             jdk = Path(selected['package'])
             java_home = Path(selected['home'])
             receipt['javaHome'] = str(java_home)
+            receipt['fixtureJvm'] = selected
             run('java', [java_home / 'bin/java', '-version'])
             # The executable ordinary-workflow check uses precisely the files
             # prefetch wrote, relocated to the sandbox with a cold native cache.
