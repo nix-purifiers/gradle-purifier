@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import threading
 from urllib.parse import unquote, urlsplit
 import zipfile
@@ -67,6 +68,10 @@ def main():
     cli = Path(args.cli).resolve() if args.cli else Path(run('cli', [
         'nix', 'build', str(root) + '#default', '--no-link', '--print-out-paths'
     ]).strip().splitlines()[-1]) / 'bin/gradle-purifier'
+    # The command keeps the caller's installed runtime; select one explicitly.
+    sys.path.insert(0, str(root / 'tests'))
+    from fixture_jvm import fixture_jvm
+    env['JAVA_HOME'] = fixture_jvm(cli, 21, work / 'fixture-jvm')['home']
     try:
         run('capture', [cli, 'lock', '--', *gradle_args])
         lock_path = source / 'gradle-purifier.lock.json'

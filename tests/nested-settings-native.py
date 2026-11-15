@@ -59,7 +59,8 @@ def main():
         captured = lock.read_bytes()
         run('prefetch', [args.cli, 'prefetch'])
         gradle = source / '.gradle-purifier/distribution/bin/gradle'
-        jdk = source / '.gradle-purifier/jdk'
+        from fixture_jvm import fixture_jvm
+        jdk = Path(fixture_jvm(args.cli, 25, work / 'fixture-jvm')['home'])
         native = {'JAVA_HOME': str(jdk)}
         run('ordinary-settings-plugins', [gradle, '--offline', '--no-daemon', 'help'],
             native | {'GRADLE_USER_HOME': str(work / 'ordinary-gradle-home')})

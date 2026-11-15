@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 #
 # The gradle-purifier command (src/gradle-purifier.sh), with the download
-# recorder (src/Recorder.java) and the Nix library (nix/lib) it runs.
+# recorder (src/Recorder.java) and the Nix runtime helpers it runs.
 {
   lib,
   # The nixpkgs source of the package set, which `gradle-purifier publish`
@@ -26,8 +26,7 @@
   unzip,
 }:
 let
-  # The recorder always uses this runtime; Gradle uses it when JAVA_HOME
-  # and the selected Java version do not request another JDK.
+  # Implementation helpers use this runtime; the project keeps its installed JVM.
   jdk = jdk21_headless;
 
   recorder = stdenvNoCC.mkDerivation {
@@ -41,6 +40,8 @@ let
       cp "$src" Recorder.java
       # The recorder uses Java 17 APIs independently of the Gradle runtime.
       javac --release 17 -Xlint:all -Werror -d "$out" Recorder.java
+      cp ${../build-gradle-project/WrapperDistribution.java} WrapperDistribution.java
+      javac --release 8 -Xlint:all,-options -Werror -d "$out" WrapperDistribution.java
       runHook postBuild
     '';
     dontInstall = true;

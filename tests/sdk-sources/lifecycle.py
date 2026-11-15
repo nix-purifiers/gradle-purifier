@@ -120,7 +120,7 @@ public class MainTest {
 }
 '''.replace('EXPECTED_EXE',json.dumps(sdk8_runtime['executable'])).replace('EXPECTED_HOME',json.dumps(sdk8_runtime['runtimeHome'])))
 originals = {str(p.relative_to(project)): p.read_bytes() for p in project.rglob('*') if p.is_file()}
-run('capture', [cli, 'lock'], project)
+run('capture', [cli, 'lock', '--bind-sdks'], project)
 lock = project/'gradle-purifier.lock.json'
 first = lock.read_bytes()
 context = json.loads(first)['projectJdks']['x86_64-linux']
@@ -134,7 +134,7 @@ for key in [(':compileJava', 'compiler'), (':compileTestJava', 'compiler'),
 observations = json.loads((project/'.gradle-purifier/lock-run/output/task-sdk-observations.json').read_text())
 for task in [':compileJava', ':compileTestJava', ':test', ':verifyRuntime', ':javadoc']:
     assert observations[task]['executed'] and not observations[task]['skipped'] and not observations[task]['failed'], task
-run('relock', [cli, 'lock', '--relock'], project)
+run('relock', [cli, 'lock', '--bind-sdks', '--relock'], project)
 assert lock.read_bytes() == first
 cold = out/'relocated'
 cold.mkdir()
@@ -144,7 +144,7 @@ for name, contents in originals.items():
     destination.write_bytes(contents)
 (cold/'gradle-purifier.lock.json').write_bytes(first)
 cold_env = dict(GRADLE_USER_HOME=str(out/'cold-gradle-home'), XDG_CACHE_HOME=str(out/'cold-cache'), JAVA_HOME=sdk17)
-run('relocated-relock', [cli, 'lock', '--relock'], cold, cold_env)
+run('relocated-relock', [cli, 'lock', '--bind-sdks', '--relock'], cold, cold_env)
 assert (cold/'gradle-purifier.lock.json').read_bytes() == first
 run('prefetch', [cli, 'prefetch'], cold, cold_env)
 assert not (out/'cold-gradle-home/caches').exists() and not (cold/'build').exists()
@@ -157,8 +157,8 @@ assert 'tests="1"' in xml and 'failures="0"' in xml
 assert (cold/'build/docs/javadoc/example/Main.html').is_file()
 run('pure-tests', [sys.executable, helper, 'build', *common, '--project', cold/'.gradle-purifier/pure-project',
     '--lock', cold/'gradle-purifier.lock.json', '--attribute', 'tests', '--root', out/'pure-tests'], cold, cold_env)
-runtime_context = json.loads((cold/'.gradle-purifier/sdkContext').read_text())
-requisites = set(subprocess.check_output(['nix-store','--query','--requisites',str(cold/'.gradle-purifier/sdkContext')],text=True).splitlines())
+runtime_context = json.loads((cold/'.gradle-purifier/project-sdk-source-context').read_text())
+requisites = set(subprocess.check_output(['nix-store','--query','--requisites',str(cold/'.gradle-purifier/project-sdk-source-context')],text=True).splitlines())
 assert set(runtime_context['sourceInputs']+[sdk['output'] for sdk in context['sdks']]) <= requisites
 run('publish', [cli,'publish','publishProofPublicationToMavenRepository'], cold, cold_env)
 jars = list((cold/'repository/example/source-sdk-proof').glob('*/*-nix-*.jar'))

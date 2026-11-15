@@ -284,24 +284,8 @@ let
     && lib.any (context: isAttrs context && (context.version or null) == "jvm-sdk-context-v2") (
       builtins.attrValues raw.projectJdks
     );
-  # Only path values and context-bearing store trees are inspected here.
-  # Preserve the old lazy behavior for derivation outputs and raw strings.
-  readableSdkDeclaration =
-    builtins.isPath src
-    || (
-      isString src
-      && lib.hasPrefix "${builtins.storeDir}/" src
-      && builtins.getContext src != { }
-      && lib.all (entry: !(entry ? outputs || entry ? allOutputs)) (
-        builtins.attrValues (builtins.getContext src)
-      )
-    );
-  hasSdkDeclaration =
-    readableSdkDeclaration && builtins.pathExists (src + "/gradle-purifier.sdks.json");
   projectJdkProblem =
-    if hasSdkDeclaration && !hasExplicitSdkContext then
-      "has an SDK declaration without a versioned manager context"
-    else if !(raw ? projectJdks) then
+    if !(raw ? projectJdks) then
       null
     else if !isAttrs raw.projectJdks then
       "has malformed project SDK contexts"

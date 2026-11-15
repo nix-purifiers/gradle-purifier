@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 from pathlib import Path
-import argparse,hashlib,importlib.util,json,os,shutil,subprocess,sys,zipfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
+import argparse,hashlib,importlib.util,json,os,shutil,subprocess,zipfile
 sys.dont_write_bytecode=True
 R=Path(__file__).resolve().parents[2]
 parser=argparse.ArgumentParser(description='Original unchanged Gradle6.9.4 legacy uploadArchives lifecycle')
@@ -15,7 +19,7 @@ class StopObservation(Exception):pass
 def flush():
  outcome['stages']=stages;outcome['fixtureSourcePreserved']=all(hashlib.sha256((project/p).read_bytes()).hexdigest()==h for project,files in projects.items() for p,h in files.items());(O/'report.json').write_text(json.dumps(outcome,indent=2)+'\n')
 def fixture(name):
- p=O/name;epoch.fixture(p,profile,sdks);projects[p]={str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in p.rglob('*') if f.is_file()};return p
+ p=O/name;epoch.fixture(p,profile,sdks);bind_fixture_sdks(p,11,[8],cli,sdks);projects[p]={str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in p.rglob('*') if f.is_file()};return p
 def run(name,command,cwd,extra=None,kind='purifier'):
  command=[str(c) for c in command]
  with (O/(name+'.log')).open('w') as log:proc=subprocess.run(command,cwd=cwd,env=dict(env,**(extra or {})),stdout=log,stderr=subprocess.STDOUT,timeout=300)
@@ -29,9 +33,9 @@ def mainclass(jar):
  with zipfile.ZipFile(jar) as z:return z.read('example/Epoch.class')
 try:
  native=fixture('native');run('native-version',['bash',gradle,'--version'],native,kind='native');run('native-build-check-upload',['bash',gradle,'--no-daemon','clean','check','uploadArchives'],native,kind='native');jar=native/'repository/example/epoch/1.0/epoch-1.0.jar';assert int.from_bytes(mainclass(jar)[6:8],'big')==52;consumer('native-consumer',jar)
- project=fixture('capture');run('purifier-lock',[cli,'lock'],project);lock=project/'gradle-purifier.lock.json';first=lock.read_bytes();(O/'captured-lock.json').write_bytes(first);run('purifier-relock',[cli,'lock','--relock'],project);assert lock.read_bytes()==first
- cold=fixture('cold');(cold/'gradle-purifier.lock.json').write_bytes(first);cold_home=O/'cold-home';cold_home.mkdir();cold_env=dict(GRADLE_USER_HOME=str(O/'cold-gradle-home'),XDG_CACHE_HOME=str(cold_home/'cache'));run('cold-relocated-relock',[cli,'lock','--relock'],cold,cold_env);assert (cold/'gradle-purifier.lock.json').read_bytes()==first;run('cold-prefetch',[cli,'prefetch'],cold,cold_env);assert not (Path(cold_env['GRADLE_USER_HOME'])/'caches').exists();assert not (cold/'build').exists();unshare=shutil.which('unshare');assert unshare and shutil.which('ip');run('cold-network-namespace-build-check',[unshare,'-rn','sh','-c','ip link set lo up && exec "$@"','legacy-offline','bash',cold/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','clean','check'],cold,cold_env)
- expr='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SOURCE");p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_PROJECT";}).ATTR''';nixenv=dict(cold_env,LEGACY_SOURCE=str(R),LEGACY_PROJECT=str(cold));run('sandbox-tests',['nix','build','--impure','--no-link','--print-build-logs','--expr',expr.replace('ATTR','tests')],cold,nixenv);release=Path(run('nix-release',['nix','build','--impure','--no-link','--print-out-paths','--expr',expr.replace('ATTR','release')],cold,nixenv).strip().splitlines()[-1]);nixJar=release/'epoch/example/epoch/1.0/epoch-1.0.jar';nixPom=release/'epoch/example/epoch/1.0/epoch-1.0.pom';assert nixJar.is_file() and nixPom.is_file();assert int.from_bytes(mainclass(nixJar)[6:8],'big')==52;expected={hashlib.sha256(nixJar.read_bytes()).hexdigest()};outcome['nixReleaseJarSha256']=next(iter(expected));outcome['nixReleasePomSha256']=hashlib.sha256(nixPom.read_bytes()).hexdigest()
+ project=fixture('capture');run('purifier-lock',[cli,'lock','--bind-sdks'],project);lock=project/'gradle-purifier.lock.json';first=lock.read_bytes();(O/'captured-lock.json').write_bytes(first);run('purifier-relock',[cli,'lock','--bind-sdks','--relock'],project);assert lock.read_bytes()==first
+ cold=fixture('cold');(cold/'gradle-purifier.lock.json').write_bytes(first);cold_home=O/'cold-home';cold_home.mkdir();cold_env=dict(GRADLE_USER_HOME=str(O/'cold-gradle-home'),XDG_CACHE_HOME=str(cold_home/'cache'));run('cold-relocated-relock',[cli,'lock','--bind-sdks','--relock'],cold,cold_env);assert (cold/'gradle-purifier.lock.json').read_bytes()==first;run('cold-prefetch',[cli,'prefetch'],cold,cold_env);assert not (Path(cold_env['GRADLE_USER_HOME'])/'caches').exists();assert not (cold/'build').exists();unshare=shutil.which('unshare');assert unshare and shutil.which('ip');run('cold-network-namespace-build-check',[unshare,'-rn','sh','-c','ip link set lo up && exec "$@"','legacy-offline','bash',cold/'.gradle-purifier/distribution/bin/gradle','--offline','--no-daemon','clean','check'],cold,cold_env)
+ expr='''let f=builtins.getFlake ("path:"+builtins.getEnv "LEGACY_SOURCE");p=import f.inputs.nixpkgs {system=builtins.currentSystem;config={};overlays=[f.overlays.default];};in (p.gradle-purifier.buildGradleProject {src=/. + builtins.getEnv "LEGACY_PROJECT";}).ATTR''';nixenv=dict(cold_env,LEGACY_SOURCE=str(R),LEGACY_PROJECT=str(cold));run('sandbox-tests',fixture_build(cli,cold,'tests'),cold,nixenv);release=Path(run('nix-release',fixture_build(cli,cold,'release'),cold,nixenv).strip().splitlines()[-1]);nixJar=release/'epoch/example/epoch/1.0/epoch-1.0.jar';nixPom=release/'epoch/example/epoch/1.0/epoch-1.0.pom';assert nixJar.is_file() and nixPom.is_file();assert int.from_bytes(mainclass(nixJar)[6:8],'big')==52;expected={hashlib.sha256(nixJar.read_bytes()).hexdigest()};outcome['nixReleaseJarSha256']=next(iter(expected));outcome['nixReleasePomSha256']=hashlib.sha256(nixPom.read_bytes()).hexdigest()
  if (cold/'build').exists():shutil.rmtree(cold/'build')
  assert not (cold/'build').exists();guard=O/'publish-compile-sentinel.init.gradle';guard.write_text("gradle.projectsEvaluated { gradle.rootProject.allprojects { p -> p.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).all { doFirst { throw new GradleException('NATIVE_COMPILATION_DURING_LEGACY_PUBLISH') } } } }\n");run('purifier-publish-original-uploadArchives',[cli,'publish','uploadArchives','--init-script',guard],cold,cold_env)
  deployed=[]

@@ -65,12 +65,10 @@ else
   echo "offline: the system makes no network namespace for this user; the refusing proxy alone cuts Gradle off" >&2
 fi
 
-# The home of the JDK that `prefetch` realized for the copy of fixture
-# $1: lib/openjdk in nixpkgs' OpenJDK on Linux, the JDK itself in its Zulu
-# JDK on Darwin.
+# Each fixture explicitly provisions its recorded packaged runtime. Dependency
+# prefetch preserves the caller's JVM and does not create an SDK link.
 jdk_home() {
-  local jdk=$work/$1/.gradle-purifier/jdk
-  if [ -d "$jdk/lib/openjdk" ]; then echo "$jdk/lib/openjdk"; else echo "$jdk"; fi
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["home"])' "$work/$1-fixture-jvm.json"
 }
 
 # Runs `gradle-purifier <arguments>` in the copy of fixture $1, with the
@@ -114,6 +112,11 @@ copy_fixture() {
     mkdir -p "$work/$name/$(dirname "$file")"
     cp "$root/tests/fixtures/$fixture/$file" "$work/$name/$file"
   done
+  # Negative copies keep the source fixture's explicit runtime even when the
+  # copied lock is deliberately malformed or has missing downloads.
+  if [ -f "$work/$fixture-fixture-jvm.json" ]; then
+    cp "$work/$fixture-fixture-jvm.json" "$work/$name-fixture-jvm.json"
+  fi
 }
 
 # The fixtures keep the wrapper properties only; the wrapper script and
@@ -130,6 +133,9 @@ fixtures=(java-library kotlin-app)
 
 for fixture in "${fixtures[@]}"; do
   copy_fixture "$fixture"
+  python3 "$root/tests/fixture_jvm.py" --cli "$command" \
+    --major "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["javaMajor"])' "$work/$fixture/gradle-purifier.lock.json")" \
+    --root "$work/fixture-jvms" > "$work/$fixture-fixture-jvm.json"
   echo "== $fixture: prefetch" >&2
   output=$(purifier "$fixture" prefetch) || { echo "$output"; fail "$fixture: prefetch failed"; }
 done

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 """Relock a SNAPSHOT/Groovy project and replay it through native Gradle."""
+import json
 import os
 from pathlib import Path
 import shutil
@@ -25,8 +26,11 @@ def main():
 
         lock = source / "gradle-purifier.lock.json"
         before = lock.read_bytes()
-        run([cli, "lock", "--relock"])
+        run([cli, "lock", "--relock", "--java", str(json.loads(before)["javaMajor"])])
         assert lock.read_bytes() == before, "relock changed unchanged dependency selections"
+        from fixture_jvm import fixture_jvm
+        selected = fixture_jvm(cli, json.loads(before)["javaMajor"], work / "fixture-jvm")
+        env["JAVA_HOME"] = selected["home"]
         run([cli, "prefetch"])
         gradle = str(source / ".gradle-purifier/distribution/bin/gradle")
         run([gradle, "--offline", "--no-daemon", "clean", "check"])

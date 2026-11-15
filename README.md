@@ -37,9 +37,9 @@ nix shell 'github:nix-purifiers/gradle-purifier'
 gradle-purifier prefetch
 ```
 
-It realizes in the Nix store the locked downloads, the JDK, the Gradle
+It realizes in the Nix store the locked downloads and the Gradle
 distribution of the wrapper and, for a Kotlin/Native build, the patched
-toolchain. Their garbage-collector roots go in `.gradle-purifier/` beside
+toolchain. It keeps the project's installed JVMs and does not acquire a JDK. Their garbage-collector roots go in `.gradle-purifier/` beside
 the lockfile. It also installs an init script in the `init.d` directory
 of the Gradle user home, which Gradle applies to every build. For the
 builds of this root, the script points every repository at the locked
@@ -56,8 +56,9 @@ so its own download cache stays empty. A build that needs a download the
 lockfile does not hold fails, and the init script names
 `gradle-purifier lock`. When the lockfile changed since the last
 prefetch, the init script says so and the build resolves the usual way
-until `prefetch` runs again. `prefetch` warns when `JAVA_HOME` names
-another Java major version than the lock, and prints the JDK to use.
+until `prefetch` runs again. Native Gradle keeps selecting the installed runtime and toolchains.
+Their ordinary version, target and compiler requirements still apply.
+Replacing a host runtime alone does not require relocking dependencies.
 
 Gradle keeps a lockfile of its own only in a build that turns on its
 dependency locking. Without one, `gradle-purifier.lock.json` records the
@@ -82,10 +83,10 @@ These are the commands:
   included builds. `--relock` makes it again regardless. A dynamic
   version, such as `3.17.+`, resolves as it did in the last lock, from
   the version listings that the lockfile holds. A relock of an unchanged
-  build reproduces the lockfile byte for byte. The lock runs Gradle on
-  nixpkgs' JDK of a major version with `--java 17`, or of the Java the
-  existing lockfile was made with. A first lock runs on `JAVA_HOME`, or
-  else on the JDK 21 of the command. Gradle arguments after `--` go into
+  build reproduces the lockfile byte for byte. Capture and relock use
+  `JAVA_HOME` or `java` on `PATH`. Only an explicit `--java 17` requests
+  a packaged nixpkgs JDK; the bundled implementation JVM never replaces
+  the installed project runtime. Gradle arguments after `--` go into
   the lockfile and into every Gradle run of the lock.
 - `gradle-purifier update [<group>:<artifact>...]` locks again with the
   newest versions that the dynamic versions allow, for every package or
@@ -245,62 +246,40 @@ The builder takes these arguments besides `src`, the root of the build:
   and `src` then needs only the files of Gradle.
 - `fetchers` replaces the fetchers of the nix-purifiers library, such as
   a `fetchurl` that sends credentials to a company repository.
-- `jdk` is the JDK that runs Gradle and the applications. The default is
-  the headless JDK of nixpkgs of the Java major version the lock was made
-  with.
+- `jdk` is the immutable Nix SDK for a sandboxed build. Undeclared projects
+  retain the packaged default by captured Java major. Host paths are never
+  sandbox SDK inputs.
 - `toolchainJdks` lists the JDKs for Java toolchains that ask for another
   Java version. Gradle provisions no toolchain in the sandbox.
 - `doCheck` runs the `check` task of each project in its package build.
 - `srcFilter` filters the build root before it is copied into the store.
 
-Without a source declaration, native capture also records additional project SDKs selected by root-build
-`JavaCompile`, `Test`, `JavaExec` and `Javadoc` task providers and effective
-executable overrides. Automatic capture currently recognizes canonical headless compiler outputs
-from the command's pinned nixpkgs. A Java major or vendor name alone is not SDK identity. The
-optional, platform-scoped `projectJdks` field binds the immutable source,
-package attribute and Nix output identity; the builder reconstructs those
-packages and includes their closures automatically. Prefetch and CLI publication
-use the same resolved SDK list. `--java` still selects the Gradle manager JDK;
-it does not replace the project's compiler or launcher selection.
+Local adoption keeps the installed Gradle runtime and native SDK discovery.
+It does not add host binary, patch, vendor or architecture admission gates to
+the dependency lock. Replacing a compatible host SDK does not require relock;
+a changed dependency graph or build definition may still require it.
+The existing `javaMajor` field remains a convenience for optional sandboxed
+SDK selection, not a native runtime allowlist.
 
-Selected roles are not claims that task actions executed. Runtime outcomes
-remain separate diagnostics. A newly requested SDK role absent from a split-SDK
-lock requires `gradle-purifier lock --relock -- <task>`. Additional ambient SDK homes,
-mutable aliases and unknown custom SDK outputs are rejected with relock advice;
-project-owned SDK sources use the opt-in declaration below. Automatic
-additional-SDK capture covers root-build roles; a nested build requesting a
-non-manager SDK fails explicitly. It does not claim complete custom-task coverage.
+The private `.gradle-purifier/native-runtime.properties` file reports the
+currently running manager JVM on a best-effort basis. It is host-local
+state, outside lock hashes, and proves no compiler or task execution coverage.
+Native Gradle enforces the actual compiler, toolchain and JVM target constraints.
+A Java 21 library cannot satisfy a Java 17 consumer merely because both SDKs
+are installed; a JRE cannot compile Java without a separate compiler SDK.
 
-When a native task has no typed SDK provider, an explicitly configured compiler
-or runtime executable can identify its SDK. The lock records this as
-`configured-native-executable` for compiler/launcher roles and still reconstructs
-the exact pinned Nix SDK output. Mutable aliases, same-version replacement outputs
-and conflicts between a provider and explicit executable fail. For a native Test
-task with neither a typed provider nor an explicit executable, the public fork-options
-copy API reads its effective runtime without setting task defaults. Resolving this
-lazy native calculation can populate Gradle's internal toolchain metadata caches.
-The lock records
-`native-effective-fork-options` for that launcher and reconstructs its exact immutable
-SDK. Unsupported, ambiguous or malformed copies fail. Other unknown selections remain
-errors; disabled tasks are not omitted. Graph, pre-task and post-task selection changes
-prevent a successful lock or output. Late hooks can still change a runtime after a
-pre-task check, so this is not a guarantee against execution before rejection.
-A selected SDK on a skipped task supplies no runtime execution credit.
-The native fork-copy path is evidenced on Gradle 7.6.6; custom fork-copy or execution-spec
-overrides fail explicitly. These observations do not establish a historical version range.
-
-Existing manager-only lockfiles retain their format and byte identity. Their
-missing SDK field does not authorize a foreign SDK: replay detects that use and
-requests a relock. Additional explicit `toolchainJdks` remain available in the
-builder API as validated Nix inputs; absent metadata never discovers or imports
-an ambient JDK. The bounded regression uses Gradle 8.14.3 with a Java 21 manager
-and Java 8 project tools, plus its same-SDK control; it establishes no historical
-Gradle API or SDK support range.
+Fully sandboxed builds use immutable Nix SDKs. Explicit `jdk` and
+`toolchainJdks` arguments must carry Nix package context, not host paths.
+A present source SDK binding retains its strict source NAR, SDK identity,
+manager and role checks. A declaration that has not been bound does not block
+local dependency fetching; sandboxed execution needs `--bind-sdks` or an
+explicit immutable `jdk`. Bundled helpers only compute paths and record
+requests; they never replace the project runtime.
 
 ### Project-owned JVM SDK sources
 
-On `x86_64-linux`, `gradle-purifier.sdks.json` opts a project into immutable
-external SDK selection. For example, this declaration selects an explicit
+On `x86_64-linux`, `gradle-purifier lock --bind-sdks` explicitly resolves
+`gradle-purifier.sdks.json` for immutable external SDK selection. For example, this declaration selects an explicit
 manager adapter from the published shared library:
 
 ```json
@@ -331,10 +310,10 @@ backend accepts immutable GitHub sources with immutable GitHub transitive
 inputs. Local mutable flakes and inferred runtime layouts are unsupported.
 
 The declaration participates in the build-definition hash. Change its pins
-explicitly and run `gradle-purifier lock --relock`; relocking validates those
+explicitly and run `gradle-purifier lock --relock --bind-sdks`; relocking validates those
 pins rather than moving them. `--java` and direct builder JDK overrides cannot
-be combined with this declaration. Source capture and CLI replay use explicit
-pure evaluation with import-from-derivation disabled.
+be combined with this explicit binding mode. Explicit SDK binding and sandboxed
+replay use pure evaluation with import-from-derivation disabled.
 
 The versioned `jvm-sdk-context-v2` lock records a mandatory actual Gradle
 manager, including builds with no SDK tasks or only manager-SDK tasks. SDK
@@ -344,8 +323,8 @@ select a replacement. Replay reconstructs source-owned values and retains SDK
 and source-tree GC roots. An actual manager or selected task SDK mismatch
 fails before the task executes. Disabled Test tasks supply no source-mode role.
 
-Original native SDK selections and project files are preserved. CLI capture
-and sandbox launches supply startup discovery defaults when no original native
+Original native SDK selections and project files are preserved. Explicitly
+bound capture and sandbox launches supply startup discovery defaults when no original native
 discovery configuration is present. Existing native discovery properties and
 arguments take precedence. Ordinary Gradle and IDE commands must already have
 working native SDK discovery, such as `org.gradle.java.installations.paths` in

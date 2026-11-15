@@ -35,7 +35,7 @@ check.dependsOn verifyManager
 '''.replace('HOME',home))
  originals={str(f.relative_to(project)):f.read_bytes() for f in project.rglob('*') if f.is_file()}
  env=dict(os.environ,XDG_CACHE_HOME=str(out/(name+'-cache')),GRADLE_USER_HOME=str(out/(name+'-gradle-home')))
- for stage, command in [('capture',[a.cli,'lock']),('relock',[a.cli,'lock','--relock']),('prefetch',[a.cli,'prefetch'])]:
+ for stage, command in [('capture',[a.cli,'lock','--bind-sdks']),('relock',[a.cli,'lock','--bind-sdks','--relock']),('prefetch',[a.cli,'prefetch'])]:
   with (out/(name+'-'+stage+'.log')).open('w') as log:r=subprocess.run([str(x) for x in command],cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=600)
   assert r.returncode==0,(name,stage,(out/(name+'-'+stage+'.log')).read_text()[-4000:])
   raw=(project/'gradle-purifier.lock.json').read_bytes()
@@ -49,15 +49,15 @@ check.dependsOn verifyManager
  else:
   assert len(context['roles'])>=2 and all(r['sdk']==context['manager']['sdk'] for r in context['roles'])
   assert 'ALL_MANAGER_SOURCE_OK' in (out/(name+'-capture.log')).read_text()
- runtime=json.loads((project/'.gradle-purifier/sdkContext').read_text())
- requisites=set(subprocess.check_output(['nix-store','--query','--requisites',str(project/'.gradle-purifier/sdkContext')],text=True).splitlines())
+ runtime=json.loads((project/'.gradle-purifier/project-sdk-source-context').read_text())
+ requisites=set(subprocess.check_output(['nix-store','--query','--requisites',str(project/'.gradle-purifier/project-sdk-source-context')],text=True).splitlines())
  assert set(runtime['sourceInputs']+[context['sdks'][0]['output']])<=requisites
- sdk_context_output=(project/'.gradle-purifier/sdkContext').resolve()
+ sdk_context_output=(project/'.gradle-purifier/project-sdk-source-context').resolve()
  with (project/'build.gradle').open('a') as f:f.write('\n// Project-only reference must not enter SDK closure: '+str(sdk_context_output)+'\n')
- for stage,command in [('changed-project-relock',[a.cli,'lock','--relock']),('changed-project-prefetch',[a.cli,'prefetch'])]:
+ for stage,command in [('changed-project-relock',[a.cli,'lock','--bind-sdks','--relock']),('changed-project-prefetch',[a.cli,'prefetch'])]:
   with (out/(name+'-'+stage+'.log')).open('w') as log:r=subprocess.run([str(x) for x in command],cwd=project,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=600)
   assert r.returncode==0,(name,stage,(out/(name+'-'+stage+'.log')).read_text()[-4000:])
- assert (project/'.gradle-purifier/sdkContext').resolve()==sdk_context_output,'project snapshot leaked into SDK closure'
+ assert (project/'.gradle-purifier/project-sdk-source-context').resolve()==sdk_context_output,'project snapshot leaked into SDK closure'
  (project/'build.gradle').write_bytes(originals['build.gradle'])
  (project/'gradle-purifier.lock.json').write_bytes(first)
  assert all((project/f).read_bytes()==raw for f,raw in originals.items())

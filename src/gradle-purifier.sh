@@ -4,9 +4,9 @@
 # names and runs it as a writeShellApplication, which sets errexit,
 # nounset and pipefail.
 #
-#   gradle-purifier lock [--relock] [--java <major>] [--lockfile <path>] [-- <gradle arguments>]
+#   gradle-purifier lock [--relock] [--bind-sdks] [--java <major>] [--lockfile <path>] [-- <gradle arguments>]
 #       records every download of the build in the lockfile
-#   gradle-purifier update [--java <major>] [--lockfile <path>] [<group>:<artifact>...] [-- <gradle arguments>]
+#   gradle-purifier update [--bind-sdks] [--java <major>] [--lockfile <path>] [<group>:<artifact>...] [-- <gradle arguments>]
 #       moves dynamic versions, and Gradle's own lockfiles, to the newest
 #       versions, then records the downloads as lock does
 #   gradle-purifier prefetch [--lockfile <path>]
@@ -54,10 +54,12 @@ Usage:
       Records every file the build downloads, by URL and hash, and the
       outputs of every project, in gradle-purifier.lock.json. The lock is
       made again only when the build definition changed, unless --relock
-      is given. Gradle runs on nixpkgs' JDK of the major version --java
-      names, or of the Java the lockfile was made with; a first lock runs
-      on JAVA_HOME, or on the command's JDK 21. The gradle
+      is given. Gradle retains the installed project runtime from
+      JAVA_HOME or java on PATH. Only an explicit --java requests a
+      packaged nixpkgs SDK. The gradle
       arguments are recorded and passed to every Gradle run of the lock.
+      --bind-sdks explicitly resolves the project's gradle-purifier.sdks.json
+      for sandboxed SDK identity; it may acquire those declared SDKs.
       A dynamic version, such as 3.17.+, resolves as it did in the lock
       before, from the version listings the lockfile holds.
   gradle-purifier update [--java <major>] [--lockfile <path>] [<group>:<artifact>...] [-- <gradle arguments>]
@@ -127,17 +129,23 @@ nixpkgs_jdk() {
   jdk_home "$out"
 }
 
-# The JDK to run the lock on: nixpkgs' JDK of the major version $1 when it
-# is given; otherwise JAVA_HOME when it is set, and the command's own JDK
-# when it is not.
+# --java explicitly requests a packaged SDK. Otherwise preserve the runtime
+# the native project would use; the implementation helper is not its runtime.
 java_home() {
+  local selected executable
   if [ -n "${1:-}" ]; then
     nixpkgs_jdk "$1"
-  elif [ -n "${JAVA_HOME:-}" ]; then
-    echo "$JAVA_HOME"
-  else
-    echo "$default_java"
+    return
   fi
+  if [ -n "${JAVA_HOME:-}" ]; then
+    selected=$(jdk_home "$JAVA_HOME")
+  else
+    executable=$(command -v java) || die "no project Java runtime is available; set JAVA_HOME or put java on PATH (or explicitly request --java)"
+    selected=$(python3 "$lib/local-jvms.py" --locate "$executable") \
+      || die "could not identify the installed runtime selected by java on PATH"
+  fi
+  [ -x "$selected/bin/java" ] || die "the selected project runtime has no executable bin/java: $selected"
+  printf '%s\n' "$selected"
 }
 
 # The distribution URL of the wrapper properties, with the escapes of the
@@ -164,6 +172,7 @@ tree_path() {
 # Source mode has a separate pure command path. The original entry points
 # retain their argument and identity meanings for undeclared projects.
 source_sdk_mode() {
+  [ -z "${local_adoption:-}" ] || return 1
   [ -f "$root/gradle-purifier.sdks.json" ] || {
     [ -f "$lockfile" ] && jq -e '[.projectJdks // {} | .[] | .version == "jvm-sdk-context-v2"] | any' "$lockfile" >/dev/null 2>&1
   }
@@ -300,7 +309,7 @@ lock_konan_host() {
 }
 
 lock_command() {
-  local relock='' java_major='' given='' input_args=() refresh_inputs=()
+  local relock='' java_major='' given='' bind_sdks='' input_args=() refresh_inputs=()
   while [ $# -gt 0 ]; do
     case $1 in
       --relock) relock=1; shift ;;
@@ -310,6 +319,7 @@ lock_command() {
         relock=1
         shift 2
         ;;
+      --bind-sdks) bind_sdks=1; shift ;;
       --java)
         [ $# -ge 2 ] || die "--java takes a Java major version, such as 17"
         java_major=$2
@@ -322,21 +332,24 @@ lock_command() {
         ;;
       --) shift; break ;;
       -h | --help) usage; exit 0 ;;
-      *) die "lock takes --relock, --java <major>, --lockfile <path> and, after --, gradle arguments; got $1" ;;
+      *) die "lock takes --relock, --bind-sdks, --java <major>, --lockfile <path> and, after --, gradle arguments; got $1" ;;
     esac
   done
   local gradle_args=("$@")
   set_paths "$given"
 
+  local local_adoption=1
+  if [ -n "$bind_sdks" ]; then local_adoption=''; fi
   local args_json current
   args_json=$(jq -n -c '$ARGS.positional' --args -- "${gradle_args[@]}")
-  if [ -f "$root/gradle-purifier.sdks.json" ] && [ -n "$java_major" ]; then
-    die "--java cannot be combined with gradle-purifier.sdks.json; select the manager in the declaration"
+  if [ -n "$bind_sdks" ] && [ -n "$java_major" ]; then
+    die "--java cannot be combined with --bind-sdks; select the manager in the SDK declaration"
   fi
   current=$(inputs_hash "$args_json")
   if [ -z "$relock" ] && [ -f "$lockfile" ] \
     && jq -e --argjson version "$lock_version" --arg current "$current" \
       '.version == $version and .inputsHash == $current' "$lockfile" >/dev/null 2>&1 \
+    && { if [ -n "$local_adoption" ]; then true; else jq -e '(.projectJdks // {} | length) > 0' "$lockfile" >/dev/null; fi; } \
     && [ "$(jq -r '.contentHash' "$lockfile")" = "$(content_hash "$lockfile")" ]; then
     echo "gradle-purifier: $lockfile is current" >&2
     return 0
@@ -349,7 +362,7 @@ lock_command() {
 }
 
 update_command() {
-  local java_major='' given='' have_args='' packages=() gradle_args=() input_args=() refresh_inputs=()
+  local java_major='' given='' have_args='' bind_sdks='' packages=() gradle_args=() input_args=() refresh_inputs=()
   while [ $# -gt 0 ]; do
     case $1 in
       --input)
@@ -357,6 +370,7 @@ update_command() {
         input_args+=(--input "$2")
         shift 2
         ;;
+      --bind-sdks) bind_sdks=1; shift ;;
       --java)
         [ $# -ge 2 ] || die "--java takes a Java major version, such as 17"
         java_major=$2
@@ -382,6 +396,8 @@ update_command() {
         ;;
     esac
   done
+  local local_adoption=1
+  if [ -n "$bind_sdks" ]; then local_adoption=''; fi
   set_paths "$given"
   # The update keeps the gradle arguments of the lock unless it is given
   # others.
@@ -392,8 +408,8 @@ update_command() {
   mkdir -p "$state"
   : >"$state/pinned.tsv"
   update_args=()
-  if [ -f "$root/gradle-purifier.sdks.json" ] && [ -n "$java_major" ]; then
-    die "--java cannot be combined with gradle-purifier.sdks.json; select the manager in the declaration"
+  if [ -n "$bind_sdks" ] && [ -n "$java_major" ]; then
+    die "--java cannot be combined with --bind-sdks; select the manager in the SDK declaration"
   fi
   if [ ${#packages[@]} -gt 0 ]; then
     pinned_listings "${packages[@]}" >"$state/pinned.tsv"
@@ -407,16 +423,10 @@ update_command() {
   run_lock "$(lock_java "$java_major")" "$state/pinned.tsv" 1 "${gradle_args[@]}"
 }
 
-# The Java major version a lock runs on: $1 when --java gave one, else the
-# one of the existing lockfile, so that a relock keeps the Java of the
-# lock it replaces; empty for a first lock, which runs on JAVA_HOME or the
-# JDK of the command.
+# Only an explicit --java requests SDK acquisition. Relocking preserves the
+# installed project runtime instead of substituting a nixpkgs SDK by old major.
 lock_java() {
-  if [ -n "$1" ]; then
-    echo "$1"
-  elif [ -f "$lockfile" ]; then
-    jq -r '.javaMajor // empty' "$lockfile" 2>/dev/null || true
-  fi
+  printf '%s\n' "$1"
 }
 
 # The version listings (maven-metadata files) of the lockfile, for the
@@ -495,7 +505,8 @@ run_lock() {
   printf '%s\t%s\t%s\n' "$(tree_path "$url")" "$url" "$dist_hash" >"$records"
   local java
   local source_context='' source_capture_args=() source_environment=() source_native_args=()
-  if [ -f "$root/gradle-purifier.sdks.json" ]; then
+  local sdk_init=$lib/task-jdks.init.gradle
+  if [ -z "${local_adoption:-}" ] && [ -f "$root/gradle-purifier.sdks.json" ]; then
     source_context=$(sdk_source_command preflight --declaration "$root/gradle-purifier.sdks.json" --root "$state/project-sdk-source-context")
     java=$(jq -er '.launchHome' "$source_context")
     source_capture_args=(--source-context "$source_context")
@@ -506,6 +517,10 @@ run_lock() {
       source_native_args=("-Porg.gradle.java.installations.paths=$(jq -r '.paths | join(",")' "$source_context")" -Porg.gradle.java.installations.auto-detect=false)
     fi
   else
+    [ -n "${local_adoption:-}" ] || die "--bind-sdks requires gradle-purifier.sdks.json"
+    unset GRADLE_PURIFIER_JDK_CONTEXT
+    sdk_init=$lib/native-runtime.init.gradle
+    source_environment=("GRADLE_PURIFIER_RUNTIME_DIAGNOSTICS=$state/native-runtime.properties")
     java=$(java_home "$java_major")
   fi
   # Empty jdk.http.auth.*.disabledSchemes let the recorder send the Basic
@@ -583,7 +598,7 @@ run_lock() {
       "JAVA_HOME=$java" \
       "$gradle_home/bin/gradle" \
       --init-script "$lib/purifier.init.gradle" \
-      --init-script "$lib/task-jdks.init.gradle" \
+      --init-script "$sdk_init" \
       "-Dorg.gradle.internal.plugins.portal.url.override=$base/$portal" \
       "-Djava.io.tmpdir=${TMPDIR:-/tmp}" \
       -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 \
@@ -619,7 +634,11 @@ run_lock() {
   # A large build locks more than fits in one argument, so the artifacts
   # go to jq as a file.
   artifacts_json "$records" >"$work/artifacts.json"
-  python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json" "${source_capture_args[@]}"
+  if [ -n "${local_adoption:-}" ]; then
+    echo '{}' >"$work/project-jdks.json"
+  else
+    python3 "$lib/capture-project-jdks.py" "$work/output/task-sdks.json" "$sdk_descriptor" "$work/project-jdks.json" "${source_capture_args[@]}"
+  fi
   if [ -d "$work/output/external-resources" ]; then
     jq -s 'add | sort_by(.build, .task, .linkUrl)' "$work/output/external-resources/"*.json >"$work/resources.json"
   else
@@ -706,14 +725,15 @@ prefetch_command() {
       *) die "prefetch takes --lockfile <path>; got $1" ;;
     esac
   done
+  local local_adoption=1
   set_paths "$given"
   [ -f "$lockfile" ] || die "the build has no $lockfile; run 'gradle-purifier lock'"
 
-  local tree jdk distribution
+  local tree distribution
+  # Dependency replay is local adoption: it does not realize a project SDK.
   tree=$(build_attr repository)
-  jdk=$(build_attr jdk)
   distribution=$(build_attr upstreamDistribution distribution)
-  realise_sdk_context
+  unset GRADLE_PURIFIER_JDK_CONTEXT
   if [ "$(jq '.projectInputs // [] | length' "$lockfile")" -gt 0 ]; then
     jq '.projectInputs' "$lockfile" > "$state/inputs.json"
     rm -rf "$state/provided" "$state/input-metadata"
@@ -723,17 +743,24 @@ prefetch_command() {
 
   # ./gradlew finds the distribution installed where it looks for it.
   local user_home=${GRADLE_USER_HOME:-$HOME/.gradle}
-  local wrapper_jar paths dist_dir zip wrapper_java wrapper_paths
+  local wrapper_jar paths dist_dir zip wrapper_java wrapper_paths native_java native_major
   wrapper_jar=$(find "$distribution/lib" -maxdepth 1 -name 'gradle-wrapper-shared-*.jar' | head -n 1)
   if [ -n "$wrapper_jar" ] && [ -f gradle/wrapper/gradle-wrapper.properties ]; then
-    wrapper_java=$(selected_java_home "$jdk")
-    if source_sdk_mode && [ "$(jq -r '.javaMajor' "$lockfile")" -lt 11 ]; then
-      # Source-file launch is a helper capability, independent of the actual
-      # project manager. Older managers retain their exact native identity.
-      wrapper_java=$default_java
+    # This helper computes wrapper paths; it never launches the project build.
+    # The precompiled helper needs Java 8, not a compiler module in the
+    # project runtime. Prefer the installed JVM for newer wrapper bytecode.
+    wrapper_java=$default_java
+    if native_java=$(java_home 2>/dev/null) &&
+      native_major=$(python3 "$lib/local-jvms.py" --home "$native_java" | jq -r '.javaMajor') &&
+      [ "$native_major" -ge 8 ]; then
+      wrapper_java=$native_java
     fi
-    wrapper_paths=$("$wrapper_java/bin/java" -cp "$wrapper_jar" "$lib/WrapperDistribution.java" "$user_home" "$root") \
-      || die "could not determine native wrapper distribution paths"
+    if ! wrapper_paths=$("$wrapper_java/bin/java" -cp "$recorder:$wrapper_jar" WrapperDistribution "$user_home" "$root" 2>"$state/wrapper-helper.log"); then
+      # A mismatched local JVM can still prefetch dependencies; this fallback
+      # computes paths only and never substitutes the runtime of a build.
+      wrapper_paths=$("$default_java/bin/java" -cp "$recorder:$wrapper_jar" WrapperDistribution "$user_home" "$root") \
+        || die "could not determine native wrapper distribution paths; see $state/wrapper-helper.log"
+    fi
     mapfile -t paths <<<"$wrapper_paths"
     dist_dir=${paths[0]}
     zip=${paths[1]}
@@ -748,6 +775,7 @@ prefetch_command() {
     echo "# Written by gradle-purifier prefetch, for the init script in $user_home/init.d."
     echo "lockFile=$lockfile"
     echo "lockSha256=$(sha256sum "$lockfile" | cut -d ' ' -f 1)"
+    echo "gradle.purifier.runtime.diagnostics=$state/native-runtime.properties"
     echo "initScript=$lib/purifier.init.gradle"
     if [ -n "${GRADLE_PURIFIER_JDK_CONTEXT:-}" ]; then
       echo "gradle.purifier.jdk.context=$sdk_context"
@@ -786,16 +814,7 @@ prefetch_command() {
   mkdir -p "$user_home/init.d"
   install -m 0644 "$lib/user.init.gradle" "$user_home/init.d/gradle-purifier.gradle"
 
-  if source_sdk_mode; then
-    echo "gradle-purifier: prefetched $lockfile. The declared native manager home is $(selected_java_home "$jdk"). Ordinary Gradle and IDE commands require working original native SDK discovery configuration; prefetch does not rewrite it. Run prefetch again after each lock." >&2
-  else
-    echo "gradle-purifier: prefetched $lockfile. ./gradlew, a Gradle on the PATH and an IDE now build $root from the locked downloads, offline; the init script is $user_home/init.d/gradle-purifier.gradle. Run 'gradle-purifier prefetch' again after each lock." >&2
-    local major
-    major=$(jq -r '.javaMajor' "$lockfile")
-    if [ -n "${JAVA_HOME:-}" ] && ! "$JAVA_HOME/bin/java" -version 2>&1 | grep -q "version \"${major}[.\"]"; then
-      echo "gradle-purifier: the lock was made on Java $major and JAVA_HOME is another; for the same builds, export JAVA_HOME=$(selected_java_home "$jdk")" >&2
-    fi
-  fi
+  echo "gradle-purifier: prefetched $lockfile. Native Gradle and IDE commands retain the installed project runtime and resolve the locked downloads offline; run prefetch again after each lock." >&2
 
 }
 

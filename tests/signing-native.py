@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 
 def main():
@@ -33,6 +34,10 @@ def main():
     env = dict(os.environ, XDG_CACHE_HOME=str(work / 'cache'),
                GRADLE_USER_HOME=str(work / 'gradle-home'), GNUPGHOME=str(work / 'gnupg'))
     env.pop('TEST_SIGNING_KEY_FILE', None)
+    # Native Gradle runs keep the caller's installed runtime; select one explicitly.
+    sys.path.insert(0, str(root / 'tests'))
+    from fixture_jvm import fixture_jvm
+    env['JAVA_HOME'] = fixture_jvm(args.cli, 17, work / 'fixture-jvm')['home']
     report = {'schema': 1, 'status': 'running', 'commands': [],
               'cli': str(args.cli), 'source': str(root),
               'publicationInit': str(publication_init),

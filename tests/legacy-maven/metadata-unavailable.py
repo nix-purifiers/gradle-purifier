@@ -9,6 +9,9 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
 parser = argparse.ArgumentParser()
 for key in ("cli", "sdks", "output"):
     parser.add_argument("--" + key, type=Path, required=True)
@@ -24,6 +27,7 @@ spec.loader.exec_module(epoch)
 profile = next(p for p in json.loads((root / "tests/epoch-probes/profiles.json").read_text())["profiles"] if p["id"] == "gradle-6.9.4")
 project = out / "producer"
 epoch.fixture(project, profile, sdk)
+bind_fixture_sdks(project, 11, [8], args.cli.resolve(), sdk)
 if args.case == "rich-selector":
     with (project / "build.gradle").open("a") as stream:
         stream.write("dependencies.add('apiElements','fixture:selector:1.0') { attributes { attribute(org.gradle.api.attributes.Attribute.of('fixture.selector',String),'special') } }\n")
@@ -58,15 +62,15 @@ def run(stage, command, rejection=None):
     return text
 
 
-run("fresh-lock", [cli, "lock"])
+run("fresh-lock", [cli, "lock", "--bind-sdks"])
 settings = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in cli.read_text().splitlines() if line.startswith(("lib=", "nixpkgs=", "purifier_source="))}
 command = ["nix-build", "--quiet", Path(settings["lib"]) / "command.nix", "--argstr", "nixpkgs", settings["nixpkgs"], "--argstr", "purifierSource", settings["purifier_source"], "--argstr", "src", project, "--argstr", "lockFile", project / "gradle-purifier.lock.json", "--no-out-link"]
-run("pure-basic-tests", command + ["-A", "tests"])
-release = Path(run("raw-release", command + ["-A", "release"]).strip().splitlines()[-1])
+run("pure-basic-tests", fixture_build(cli, project, "tests"))
+release = Path(run("raw-release", fixture_build(cli, project, "release")).strip().splitlines()[-1])
 status = json.loads((release / "epoch/nix-support/legacy-native-metadata.json").read_text())
 assert status["state"] == "unsupported" and status["reason"] == reason, status
 assert not list((release / "epoch/example/epoch").rglob("*.module"))
-run("strict-projection-rejected", command + ["-A", "publication"], "legacy native metadata unavailable: " + reason)
+run("strict-projection-rejected", fixture_build(cli, project, "publication"), "legacy native metadata unavailable: " + reason)
 run("strict-cli-publish-rejected", [cli, "publish", "uploadArchives"], "legacy native metadata unavailable: " + reason)
 assert not (project / "repository").exists()
 print("UNSUPPORTED_METADATA_BASIC_PASS_STRICT_REJECT_PASS", flush=True)

@@ -21,6 +21,7 @@ def portalKey = 'org.gradle.internal.plugins.portal.url.override'
 def keys = [
     'gradle.purifier.mode',
     'gradle.purifier.jdk.context',
+    'gradle.purifier.runtime.diagnostics',
     'gradle.purifier.sdk.root',
     'gradle.purifier.repository',
     'gradle.purifier.resources',
@@ -83,4 +84,4 @@ keys.each { key ->
 }
 apply from: p.getProperty('initScript')
 
-apply from: new File(new File(p.getProperty('initScript')).parentFile, 'task-jdks.init.gradle')
+apply from: new File(new File(p.getProperty('initScript')).parentFile, 'native-runtime.init.gradle')

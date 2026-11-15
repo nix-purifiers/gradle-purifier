@@ -9,6 +9,9 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixture_jvm import bind_fixture_sdks
+from fixture_build import command as fixture_build
 parser = argparse.ArgumentParser()
 for key in ('cli', 'sdks', 'output'):
     parser.add_argument('--' + key, type=Path, required=True)
@@ -30,6 +33,7 @@ for identifier, manager in [('gradle-6.9.4', 'java11'), ('gradle-7.6.6', 'java17
     profile = next(p for p in profiles if p['id'] == identifier)
     project = out / identifier
     epoch.fixture(project, profile, sdk)
+    bind_fixture_sdks(project, int(manager.removeprefix('java')), [8], args.cli.resolve(), sdk)
     (project / 'aggregate-input.txt').write_text('fixture')
     with (project / 'build.gradle').open('a') as stream:
         stream.write('''
@@ -124,7 +128,7 @@ gradle.taskGraph.whenReady { graph ->
 ''')
     receipt = out / (identifier + '-selection.json')
     env = dict(os.environ, JAVA_HOME=sdk[manager]['home'], GRADLE_USER_HOME=str(out / (identifier + '-home')), XDG_CACHE_HOME=str(out / (identifier + '-cache')), SELECTION_RECEIPT=str(receipt), LATE_PRIVATE_DEPENDENCY='1' if args.late_private_dependency else '0', PRIVATE_EDGE_KIND=args.private_edge_kind)
-    command = [str(args.cli.resolve()), 'lock']
+    command = [str(args.cli.resolve()), 'lock', '--bind-sdks']
     with (out / (identifier + '.log')).open('w') as log:
         result = subprocess.run(command, cwd=project, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
     if args.late_private_dependency:
@@ -157,9 +161,9 @@ gradle.taskGraph.whenReady { graph ->
     for attribute in ['tests','packages.epoch.maven']:
         stage = identifier + '-' + attribute.replace('.','-')
         with (out / (stage + '.log')).open('w') as log:
-            native = subprocess.run(nix + ['-A',attribute], cwd=project, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
+            native = subprocess.run(fixture_build(args.cli.resolve(), project, attribute), cwd=project, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
         assert native.returncode == 0, (out / (stage + '.log')).read_text()[-7000:]
-        nixStages.append(dict(attribute=attribute,command=nix+['-A',attribute],exitCode=native.returncode))
+        nixStages.append(dict(attribute=attribute,command=fixture_build(args.cli.resolve(), project, attribute),exitCode=native.returncode))
     rows.append(dict(profile=identifier, command=command, exitCode=result.returncode, nixStages=nixStages, selection=selection, realUserPublicationRetained=True, unrelatedTasksExcluded=True))
     (out / 'report.json').write_text(json.dumps(rows, indent=2))
     print(identifier, 'PASS', flush=True)

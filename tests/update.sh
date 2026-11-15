@@ -28,6 +28,11 @@ fail() {
   cp "$root/tests/fixtures/update/$file" "$work/update/$file"
 done
 cd "$work/update"
+# The command keeps the caller's installed runtime; select the lock's major
+# explicitly rather than whatever Java the runner image puts on PATH.
+JAVA_HOME=$(python3 "$root/tests/fixture_jvm.py" --cli "$command" \
+  --major "$(jq -r .javaMajor gradle-purifier.lock.json)" --root "$work/fixture-jvm" | jq -r .home)
+export JAVA_HOME
 
 grep -q 'commons-lang3:3.12.0=' gradle.lockfile || fail "the fixture does not pin commons-lang3 3.12.0"
 "$command" update org.apache.commons:commons-lang3 || fail "update failed"

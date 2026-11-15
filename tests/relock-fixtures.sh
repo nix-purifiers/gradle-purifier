@@ -20,7 +20,7 @@ command=$(nix build --no-link --print-out-paths "$root#gradle-purifier")/bin/gra
 export GRADLE_PURIFIER_CENTRAL_MIRROR=1
 
 for fixture in "$root"/tests/fixtures/*/; do
-  java=()
+  java=(--java "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["javaMajor"])' "$fixture/gradle-purifier.lock.json")")
   case $(basename "$fixture") in
     kotlin-native)
       [ "$(uname -m)" = x86_64 ] || continue
